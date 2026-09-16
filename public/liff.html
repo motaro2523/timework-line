@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TimeWork</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background:#f4f7fb; color:#263238; padding-bottom:1rem; }
+    .wrap { max-width:34rem; margin:0 auto; padding:1rem; }
+    .card { border:0; border-radius:1rem; box-shadow:0 .3rem 1rem rgba(29,47,64,.08); }
+    .btn-lg { padding:.9rem 1rem; font-size:1.05rem; }
+    .brand { background:linear-gradient(180deg,#075a35,#087e45); color:#fff; border-radius:1rem; }
+    .tabs { display:grid; grid-template-columns:repeat(4,1fr); gap:.4rem; margin:.75rem 0; }
+    .tabs button { border:0; border-radius:.8rem; background:#fff; color:#546e7a; padding:.6rem .2rem;
+      font-size:.78rem; line-height:1.2; box-shadow:0 .2rem .6rem rgba(29,47,64,.06); }
+    .tabs button.active { background:#087e45; color:#fff; }
+    .tabs button i { display:block; font-size:1.15rem; margin-bottom:.15rem; }
+    .money { font-size:1.6rem; font-weight:700; }
+    .row-line { display:flex; justify-content:space-between; padding:.35rem 0; border-bottom:1px solid #eceff1; }
+    .row-line:last-child { border-bottom:0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand p-3 mb-2 d-flex align-items-center gap-2">
+      <i class="bi bi-clock-history fs-4"></i>
+      <div class="flex-grow-1">
+        <div class="fw-bold" id="brandTitle">TimeWork</div>
+        <small class="text-white-50" id="brandSub">กำลังโหลด...</small>
+      </div>
+    </div>
+
+    <div class="tabs d-none" id="tabs">
+      <button data-tab="checkin"><i class="bi bi-clock"></i>ลงเวลา</button>
+      <button data-tab="pay"><i class="bi bi-cash-coin"></i>ค่าตอบแทน</button>
+      <button data-tab="advance"><i class="bi bi-wallet2"></i>เงินที่เบิก</button>
+      <button data-tab="expense" class="d-none" id="tabExpense"><i class="bi bi-receipt"></i>ค่าใช้จ่าย</button>
+    </div>
+
+    <!-- ลงเวลา -->
+    <div id="view-checkin">
+      <div class="card card-body mb-3" id="employeeCard">
+        <div class="d-flex align-items-center gap-2 text-secondary">
+          <span class="spinner-border spinner-border-sm"></span> กำลังตรวจสอบบัญชี LINE...
+        </div>
+      </div>
+      <div class="card card-body mb-3 d-none" id="locationCard">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <div>
+            <div class="fw-semibold mb-1"><i class="bi bi-geo-alt-fill text-danger me-1"></i>ตำแหน่งของคุณ</div>
+            <div class="small text-secondary" id="locationText">กำลังหาตำแหน่ง...</div>
+          </div>
+          <button class="btn btn-outline-secondary btn-sm text-nowrap" id="locateBtn"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+      </div>
+      <div class="d-grid gap-2 mb-3 d-none" id="actionCard">
+        <button class="btn btn-success btn-lg" id="checkInBtn" disabled><i class="bi bi-box-arrow-in-right me-1"></i>ลงเวลาเข้า</button>
+        <button class="btn btn-primary btn-lg" id="checkOutBtn" disabled><i class="bi bi-box-arrow-right me-1"></i>ลงเวลาออก</button>
+      </div>
+      <div id="result"></div>
+    </div>
+
+    <!-- เดือนที่ดู ใช้ร่วมกันของ 3 แท็บล่าง -->
+    <div class="card card-body py-2 mb-3 d-none" id="monthCard">
+      <div class="d-flex align-items-center justify-content-between gap-2">
+        <button class="btn btn-outline-secondary btn-sm" id="monthPrev"><i class="bi bi-chevron-left"></i></button>
+        <div class="fw-semibold" id="monthLabel">—</div>
+        <button class="btn btn-outline-secondary btn-sm" id="monthNext"><i class="bi bi-chevron-right"></i></button>
+      </div>
+    </div>
+
+    <!-- ค่าตอบแทน -->
+    <div id="view-pay" class="d-none"><div class="card card-body" id="payCard"></div></div>
+
+    <!-- เงินที่เบิก -->
+    <div id="view-advance" class="d-none"><div class="card card-body" id="advanceCard"></div></div>
+
+    <!-- ส่งรายการค่าใช้จ่าย -->
+    <div id="view-expense" class="d-none">
+      <div class="card card-body mb-3">
+        <div class="fw-semibold mb-2"><i class="bi bi-plus-circle me-1"></i>ส่งรายการค่าใช้จ่าย</div>
+        <div class="mb-2">
+          <label class="form-label small mb-1" for="expenseDate">วันที่ใช้จ่าย</label>
+          <input class="form-control" type="date" id="expenseDate">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1" for="expenseCategory">ประเภท</label>
+          <select class="form-select" id="expenseCategory"></select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1" for="expenseAmount">จำนวนเงิน (บาท)</label>
+          <input class="form-control" type="number" id="expenseAmount" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small mb-1" for="expenseDetail">รายละเอียด</label>
+          <input class="form-control" id="expenseDetail" maxlength="200" placeholder="เช่น ค่าแท็กซี่ไปประชุม">
+        </div>
+        <button class="btn btn-success btn-lg w-100" id="expenseSubmitBtn"><i class="bi bi-send me-1"></i>ส่งรายการ</button>
+        <div id="expenseFormMsg" class="small mt-2"></div>
+      </div>
+      <div class="card card-body" id="expenseListCard"></div>
+    </div>
+  </div>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+    const $ = id => document.getElementById(id);
+    const baht = v => new Intl.NumberFormat('th-TH',{ minimumFractionDigits:2, maximumFractionDigits:2 }).format(Number(v ?? 0));
+    const formatDay = v => v ? new Intl.DateTimeFormat('th-TH',{ dateStyle:'medium' }).format(new Date(`${v}T00:00:00`)) : '';
+    const bangkokToday = () => new Intl.DateTimeFormat('en-CA',{ timeZone:'Asia/Bangkok' }).format(new Date());
+    const alertBox = (kind, html) => `<div class="alert alert-${kind} mb-0">${html}</div>`;
+
+    let accessToken = null;
+    let position = null;
+    let summary = null;
+    let month = bangkokToday().slice(0,7);
+    let activeTab = 'checkin';
+
+    // ---------- แท็บ ----------
+    const TABS = ['checkin','pay','advance','expense'];
+    function showTab(tab) {
+      activeTab = TABS.includes(tab) ? tab : 'checkin';
+      for (const name of TABS) $(`view-${name}`).classList.toggle('d-none', name !== activeTab);
+      document.querySelectorAll('.tabs button').forEach(button =>
+        button.classList.toggle('active', button.dataset.tab === activeTab));
+      $('monthCard').classList.toggle('d-none', activeTab === 'checkin');
+      if (activeTab !== 'checkin' && !summary) loadSummary();
+    }
+
+    // ---------- ลงเวลา ----------
+    function setButtons(status) {
+      $('actionCard').classList.remove('d-none');
+      const ready = Boolean(position);
+      $('checkInBtn').disabled = !ready || Boolean(status.first_in);
+      $('checkOutBtn').disabled = !ready || Boolean(status.last_out) || !status.first_in;
+      $('checkInBtn').innerHTML = status.first_in
+        ? `<i class="bi bi-check2-circle me-1"></i>ลงเวลาเข้าแล้ว ${esc(status.first_in)}`
+        : '<i class="bi bi-box-arrow-in-right me-1"></i>ลงเวลาเข้า';
+      $('checkOutBtn').innerHTML = status.last_out
+        ? `<i class="bi bi-check2-circle me-1"></i>ลงเวลาออกแล้ว ${esc(status.last_out)}`
+        : '<i class="bi bi-box-arrow-right me-1"></i>ลงเวลาออก';
+    }
+
+    function renderEmployee(status) {
+      const shift = status.leave_type
+        ? `<span class="badge text-bg-warning">${esc(status.leave_type)}</span>`
+        : status.shift_name
+          ? `${esc(status.shift_name)} <span class="text-secondary">${esc(status.shift_start)}–${esc(status.shift_end)}</span>`
+          : status.off_schedule
+            ? '<span class="badge text-bg-warning">วันนี้ไม่มีตารางงาน</span>'
+            : '<span class="text-secondary">ยังไม่ได้กำหนดกะ</span>';
+      $('employeeCard').innerHTML = `
+        <div class="fw-bold fs-5">${esc(status.name)}</div>
+        <div class="text-secondary small mb-2">รหัส ${esc(status.employee_code)}</div>
+        <div class="small"><i class="bi bi-clock me-1"></i>กะวันนี้: ${shift}</div>`;
+      $('brandTitle').textContent = status.name;
+      $('brandSub').textContent = new Intl.DateTimeFormat('th-TH',{ dateStyle:'full' }).format(new Date());
+      $('tabs').classList.remove('d-none');
+      // รู้สิทธิ์ตั้งแต่โหลดแรก แท็บค่าใช้จ่ายจะได้ไม่หายไปจนกว่าจะกดแท็บอื่น
+      if (status.can_submit_expense !== undefined) {
+        $('tabExpense').classList.toggle('d-none', !status.can_submit_expense);
+      }
+    }
+
+    async function loadStatus() {
+      const response = await fetch('/api/liff/status', {
+        method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ accessToken })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        $('employeeCard').innerHTML = alertBox('warning',
+          `<div class="fw-semibold">${esc(data.error ?? 'ไม่สามารถตรวจสอบบัญชีได้')}</div>`
+          + (data.hint ? `<div class="small mt-1">${esc(data.hint)}</div>` : ''));
+        return null;
+      }
+      renderEmployee(data);
+      setButtons(data);
+      return data;
+    }
+
+    function locate() {
+      $('locationCard').classList.remove('d-none');
+      $('locationText').textContent = 'กำลังหาตำแหน่ง...';
+      $('locateBtn').disabled = true;
+      if (!navigator.geolocation) {
+        $('locationText').innerHTML = '<span class="text-danger">อุปกรณ์นี้ไม่รองรับการหาตำแหน่ง</span>';
+        $('locateBtn').disabled = false;
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(result => {
+        position = result.coords;
+        const accuracy = Math.round(position.accuracy);
+        $('locationText').innerHTML = `${position.latitude.toFixed(6)}, ${position.longitude.toFixed(6)}`
+          + ` · ความแม่นยำ ±${accuracy} ม.`
+          + (accuracy > 100 ? ' <span class="text-danger">(ความแม่นยำต่ำ ลองออกไปที่โล่งแล้วกดรีเฟรช)</span>' : '');
+        $('locateBtn').disabled = false;
+        loadStatus();
+      }, error => {
+        position = null;
+        const reason = error.code === 1 ? 'คุณปฏิเสธการเข้าถึงตำแหน่ง กรุณาอนุญาตในตั้งค่าแล้วลองใหม่'
+          : error.code === 3 ? 'หาตำแหน่งไม่ทัน กรุณาลองใหม่' : 'หาตำแหน่งไม่สำเร็จ กรุณาลองใหม่';
+        $('locationText').innerHTML = `<span class="text-danger">${esc(reason)}</span>`;
+        $('locateBtn').disabled = false;
+        $('checkInBtn').disabled = true;
+        $('checkOutBtn').disabled = true;
+      }, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+    }
+
+    async function submitCheck(eventType, button) {
+      if (!position) { $('result').innerHTML = alertBox('warning','ยังไม่ได้พิกัด กรุณากดปุ่มรีเฟรชตำแหน่ง'); return; }
+      const label = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังบันทึก';
+      try {
+        const response = await fetch('/api/liff/check-in', {
+          method:'POST', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ accessToken, eventType,
+            latitude: position.latitude, longitude: position.longitude, accuracy: position.accuracy })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) { $('result').innerHTML = alertBox('danger', esc(data.error ?? 'บันทึกไม่สำเร็จ')); return; }
+        const lines = [`<div class="fw-bold fs-5">${eventType === 'check_in' ? 'ลงเวลาเข้าสำเร็จ' : 'ลงเวลาออกสำเร็จ'}</div>`,
+          `<div>${esc(data.name)} · เวลา ${esc(data.time_of_day)} น.</div>`];
+        if (data.shift_name) lines.push(`<div class="small">กะ ${esc(data.shift_name)} เข้างาน ${esc(data.shift_start)} น.`
+          + (data.late_minutes > 0 ? ` · <span class="text-danger fw-semibold">สาย ${data.late_minutes} นาที</span>`
+             : data.late_minutes === 0 ? ' · <span class="text-success-emphasis">ตรงเวลา</span>' : '') + '</div>');
+        if (data.off_schedule) lines.push('<div class="small text-warning-emphasis">วันนี้ไม่มีตารางงาน บันทึกเป็นการทำงานนอกตาราง</div>');
+        if (data.site_name) lines.push(`<div class="small">${data.inside_site
+          ? `<span class="text-success-emphasis"><i class="bi bi-geo-fill me-1"></i>อยู่ในพื้นที่ ${esc(data.site_name)} (ห่าง ${data.distance_m} ม.)</span>`
+          : `<span class="text-danger"><i class="bi bi-geo me-1"></i>อยู่นอกพื้นที่ ${esc(data.site_name)} ห่าง ${data.distance_m} ม.</span>`}</div>`);
+        $('result').innerHTML = alertBox(data.inside_site === false || data.off_schedule ? 'warning' : 'success', lines.join(''));
+        summary = null;
+        await loadStatus();
+      } catch {
+        $('result').innerHTML = alertBox('danger','เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่');
+      } finally {
+        button.innerHTML = label;
+      }
+    }
+
+    // ---------- ข้อมูลเงินของเดือนที่เลือก ----------
+    const monthLabel = value => new Intl.DateTimeFormat('th-TH',{ year:'numeric', month:'long' })
+      .format(new Date(`${value}-01T00:00:00`));
+
+    async function loadSummary() {
+      $('monthLabel').textContent = monthLabel(month);
+      $('payCard').innerHTML = '<div class="text-secondary"><span class="spinner-border spinner-border-sm me-1"></span>กำลังโหลด...</div>';
+      $('advanceCard').innerHTML = $('payCard').innerHTML;
+      try {
+        const response = await fetch('/api/liff/summary', {
+          method:'POST', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ accessToken, month })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const message = alertBox('warning', esc(data.error ?? 'โหลดข้อมูลไม่สำเร็จ'));
+          $('payCard').innerHTML = message;
+          $('advanceCard').innerHTML = message;
+          return;
+        }
+        summary = data;
+        $('tabExpense').classList.toggle('d-none', !data.can_submit_expense);
+        renderPay(data);
+        renderAdvance(data);
+        renderExpenses(data);
+      } catch {
+        const message = alertBox('danger','เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
+        $('payCard').innerHTML = message;
+        $('advanceCard').innerHTML = message;
+      }
+    }
+
+    function renderPay(data) {
+      const pay = data.pay;
+      if (!pay || !pay.has_type) {
+        $('payCard').innerHTML = alertBox('secondary','ยังไม่ได้กำหนดประเภทค่าตอบแทนให้บัญชีนี้ กรุณาแจ้งผู้ดูแล');
+        return;
+      }
+      const line = (label, value, cls = '') => `<div class="row-line"><span class="text-secondary">${label}</span><span class="${cls}">${value}</span></div>`;
+      $('payCard').innerHTML = `
+        <div class="text-secondary small">ยอดสุทธิเดือนนี้</div>
+        <div class="money text-success-emphasis mb-1">${baht(pay.net_pay)} <span class="fs-6 text-secondary fw-normal">บาท</span></div>
+        <div class="small text-secondary mb-3">${esc(pay.employee_type_name)} · ${pay.pay_type === 'monthly' ? 'รายเดือน' : 'รายวัน'} ${baht(pay.pay_rate)} บาท</div>
+        ${line('วันทำงาน', `${pay.worked_days} วัน`)}
+        ${line('ขาดงาน', `${pay.absent_days} วัน`, pay.absent_days ? 'text-danger' : '')}
+        ${line('ลา', `${pay.leave_days} วัน`)}
+        ${line('มาสาย', `${pay.late_minutes} นาที`, pay.late_minutes ? 'text-danger' : '')}
+        <hr class="my-2">
+        ${line('ค่าแรง', `${baht(pay.base_pay)} บาท`)}
+        ${line(`ค่า OT (อนุมัติ ${pay.ot_paid_minutes} จาก ${pay.ot_minutes} นาที)`, `${baht(pay.ot_pay)} บาท`)}
+        ${pay.ot_pending_minutes ? line('OT รออนุมัติ', `${pay.ot_pending_minutes} นาที`, 'text-warning-emphasis') : ''}
+        ${line('หักขาดงาน', `-${baht(pay.absent_deduct)} บาท`, pay.absent_deduct ? 'text-danger' : '')}
+        ${line('หักมาสาย', `-${baht(pay.late_deduct)} บาท`, pay.late_deduct ? 'text-danger' : '')}
+        <hr class="my-2">
+        ${line('<strong>ยอดสุทธิ</strong>', `<strong>${baht(pay.net_pay)} บาท</strong>`)}
+        ${line('หักเงินที่เบิกไปแล้ว', `-${baht(pay.advance_total)} บาท`)}
+        ${line('จ่ายแล้ว', `-${baht(pay.payment_total)} บาท`)}
+        ${line('<strong>คงเหลือรอรับ</strong>', `<strong class="text-success-emphasis">${baht(pay.balance)} บาท</strong>`)}
+        <div class="small text-secondary mt-3"><i class="bi bi-info-circle me-1"></i>ตัวเลขนี้คำนวณจากข้อมูลถึงปัจจุบัน ยอดจริงยืนยันโดยฝ่ายบุคคล</div>`;
+    }
+
+    function renderAdvance(data) {
+      const rows = data.entries ?? [];
+      const advance = rows.filter(r => r.kind === 'advance').reduce((sum, r) => sum + r.amount, 0);
+      const payment = rows.filter(r => r.kind === 'payment').reduce((sum, r) => sum + r.amount, 0);
+      $('advanceCard').innerHTML = `
+        <div class="d-flex gap-3 mb-3">
+          <div class="flex-fill"><div class="text-secondary small">เบิกล่วงหน้า</div>
+            <div class="fs-4 fw-bold text-warning-emphasis">${baht(advance)}</div></div>
+          <div class="flex-fill"><div class="text-secondary small">จ่ายแล้ว</div>
+            <div class="fs-4 fw-bold text-success-emphasis">${baht(payment)}</div></div>
+        </div>
+        ${rows.length ? rows.map(r => `<div class="row-line">
+          <span><span class="badge ${r.kind === 'advance' ? 'text-bg-warning-subtle text-warning-emphasis' : 'text-bg-success-subtle text-success-emphasis'}">${r.kind === 'advance' ? 'เบิก' : 'จ่าย'}</span>
+            <span class="ms-1">${esc(formatDay(r.entry_date))}</span>
+            ${r.method ? `<span class="text-secondary small ms-1">${esc(r.method)}</span>` : ''}
+            ${r.note ? `<div class="small text-secondary">${esc(r.note)}</div>` : ''}</span>
+          <span class="fw-semibold">${baht(r.amount)}</span></div>`).join('')
+        : '<div class="text-secondary text-center py-3">ยังไม่มีรายการเบิกหรือจ่ายในเดือนนี้</div>'}`;
+    }
+
+    const EXPENSE_STATUS = {
+      pending: '<span class="badge text-bg-warning">รอตรวจ</span>',
+      approved: '<span class="badge text-bg-success">อนุมัติแล้ว</span>',
+      rejected: '<span class="badge text-bg-danger">ไม่อนุมัติ</span>'
+    };
+
+    function renderExpenses(data) {
+      if (!$('expenseCategory').options.length) {
+        $('expenseCategory').innerHTML = (data.categories ?? []).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+      }
+      const rows = data.expenses ?? [];
+      const approved = rows.filter(r => r.status === 'approved').reduce((sum, r) => sum + (r.approved_amount ?? 0), 0);
+      const pending = rows.filter(r => r.status === 'pending').reduce((sum, r) => sum + r.amount, 0);
+      $('expenseListCard').innerHTML = `
+        <div class="fw-semibold mb-2">รายการที่ส่งเดือนนี้</div>
+        <div class="d-flex gap-3 mb-3">
+          <div class="flex-fill"><div class="text-secondary small">รอตรวจ</div>
+            <div class="fs-5 fw-bold text-warning-emphasis">${baht(pending)}</div></div>
+          <div class="flex-fill"><div class="text-secondary small">อนุมัติแล้ว</div>
+            <div class="fs-5 fw-bold text-success-emphasis">${baht(approved)}</div></div>
+        </div>
+        ${rows.length ? rows.map(r => `<div class="row-line align-items-start">
+          <span>${EXPENSE_STATUS[r.status] ?? ''} <span class="ms-1">${esc(r.category)}</span>
+            <div class="small text-secondary">${esc(formatDay(r.claim_date))}${r.detail ? ' · ' + esc(r.detail) : ''}</div>
+            ${r.review_note ? `<div class="small text-danger">${esc(r.review_note)}</div>` : ''}</span>
+          <span class="text-end text-nowrap">
+            <span class="fw-semibold">${baht(r.amount)}</span>
+            ${r.status === 'approved' && r.approved_amount !== null && r.approved_amount !== r.amount
+              ? `<div class="small text-success-emphasis">อนุมัติ ${baht(r.approved_amount)}</div>` : ''}
+            ${r.status === 'pending' ? `<div><button class="btn btn-sm btn-outline-secondary mt-1" data-cancel-expense="${esc(r.id)}"><i class="bi bi-trash3"></i></button></div>` : ''}
+          </span></div>`).join('')
+        : '<div class="text-secondary text-center py-3">ยังไม่มีรายการในเดือนนี้</div>'}`;
+    }
+
+    async function submitExpense() {
+      const button = $('expenseSubmitBtn');
+      const label = button.innerHTML;
+      $('expenseFormMsg').textContent = '';
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังส่ง';
+      try {
+        const response = await fetch('/api/liff/expenses', {
+          method:'POST', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ accessToken, claimDate: $('expenseDate').value,
+            category: $('expenseCategory').value, amount: Number($('expenseAmount').value || 0),
+            detail: $('expenseDetail').value })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          $('expenseFormMsg').innerHTML = `<span class="text-danger">${esc(data.error ?? 'ส่งไม่สำเร็จ')}</span>`;
+          return;
+        }
+        $('expenseFormMsg').innerHTML = '<span class="text-success-emphasis">ส่งรายการแล้ว รอผู้ดูแลตรวจ</span>';
+        $('expenseAmount').value = '';
+        $('expenseDetail').value = '';
+        await loadSummary();
+      } catch {
+        $('expenseFormMsg').innerHTML = '<span class="text-danger">เชื่อมต่อเซิร์ฟเวอร์ไม่ได้</span>';
+      } finally {
+        button.innerHTML = label;
+        button.disabled = false;
+      }
+    }
+
+    // ---------- เหตุการณ์ ----------
+    document.querySelectorAll('.tabs button').forEach(button =>
+      button.addEventListener('click', () => showTab(button.dataset.tab)));
+    $('monthPrev').addEventListener('click', () => { month = shiftMonth(month, -1); summary = null; loadSummary(); });
+    $('monthNext').addEventListener('click', () => { month = shiftMonth(month, 1); summary = null; loadSummary(); });
+    function shiftMonth(value, step) {
+      const [year, index] = value.split('-').map(Number);
+      const date = new Date(Date.UTC(year, index - 1 + step, 1));
+      return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2,'0')}`;
+    }
+    $('expenseSubmitBtn').addEventListener('click', submitExpense);
+    $('expenseListCard').addEventListener('click', async event => {
+      const button = event.target.closest('button[data-cancel-expense]');
+      if (!button) return;
+      if (!confirm('ลบรายการนี้?')) return;
+      button.disabled = true;
+      await fetch('/api/liff/expenses/cancel', {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ accessToken, id: button.dataset.cancelExpense })
+      });
+      await loadSummary();
+    });
+    $('locateBtn').addEventListener('click', locate);
+    $('checkInBtn').addEventListener('click', () => submitCheck('check_in', $('checkInBtn')));
+    $('checkOutBtn').addEventListener('click', () => submitCheck('check_out', $('checkOutBtn')));
+
+    // เปิดแท็บตรงจากริชเมนูได้ เช่น ...liff.line.me/<id>?p=pay
+    function requestedTab() {
+      const fromQuery = new URLSearchParams(location.search).get('p');
+      const fromHash = location.hash.replace('#','');
+      return TABS.includes(fromQuery) ? fromQuery : (TABS.includes(fromHash) ? fromHash : 'checkin');
+    }
+
+    async function start() {
+      try {
+        const config = await fetch('/api/liff/config').then(r => r.json());
+        if (!config.liffId) {
+          $('employeeCard').innerHTML = alertBox('danger','ระบบยังไม่ได้ตั้งค่า LIFF ID กรุณาแจ้งผู้ดูแล');
+          return;
+        }
+        await liff.init({ liffId: config.liffId });
+        if (!liff.isLoggedIn()) { liff.login(); return; }
+        accessToken = liff.getAccessToken();
+        if (!accessToken) {
+          $('employeeCard').innerHTML = alertBox('danger','ไม่ได้รับ access token จาก LINE กรุณาเปิดหน้านี้ใหม่');
+          return;
+        }
+        $('expenseDate').value = bangkokToday();
+        const status = await loadStatus();
+        if (!status) return;
+        showTab(requestedTab());
+        if (activeTab === 'checkin') locate();
+      } catch (error) {
+        $('employeeCard').innerHTML = alertBox('danger', `เปิดหน้าไม่สำเร็จ: ${esc(error && error.message)}`);
+      }
+    }
+    start();
+  </script>
+</body>
+</html>

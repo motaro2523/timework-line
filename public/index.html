@@ -1,0 +1,2614 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TimeWork | แดชบอร์ด</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background:#f4f7fb; color:#263238; }
+    .sidebar { width:264px; min-height:100vh; background:linear-gradient(180deg,#075a35,#087e45); }
+    .brand { font-weight:700; letter-spacing:.2px; }
+    .nav-pills .nav-link { color:#d8f5e5; margin:.2rem .6rem; border-radius:.6rem; }
+    .nav-pills .nav-link.active,.nav-pills .nav-link:hover { background:#fff; color:#087e45; }
+    .stat-card,.table-card { border:0; border-radius:1rem; box-shadow:0 .3rem 1rem rgba(29,47,64,.06); }
+    .stat-icon { width:48px; height:48px; display:grid; place-items:center; border-radius:.8rem; font-size:1.35rem; }
+    .empty-state { padding:4rem 1rem; }
+    #employeesTable tr, #shiftsTable tr { cursor:pointer; }
+    @media (max-width:767.98px){ .sidebar{width:100%;min-height:auto} }
+  </style>
+</head>
+<body>
+  <div class="d-md-flex">
+    <aside class="sidebar p-3 d-flex flex-column">
+      <a class="brand d-flex align-items-center gap-2 text-white text-decoration-none fs-4 px-2 py-3" href="#overview"><i class="bi bi-clock-history"></i> TimeWork</a>
+      <div class="small text-white-50 px-2 mb-4">ระบบจัดการเวลาทำงาน</div>
+      <nav class="nav nav-pills flex-column gap-1">
+        <a class="nav-link" href="#overview" data-page="overview"><i class="bi bi-grid-fill me-2"></i>ภาพรวม</a>
+        <a class="nav-link" href="#employees" data-page="employees"><i class="bi bi-people-fill me-2"></i>พนักงาน</a>
+        <a class="nav-link" href="#shifts" data-page="shifts"><i class="bi bi-clock me-2"></i>กะการทำงาน</a>
+        <a class="nav-link" href="#schedule" data-page="schedule"><i class="bi bi-calendar3-week me-2"></i>ตารางการทำงาน</a>
+        <a class="nav-link" href="#leaves" data-page="leaves"><i class="bi bi-person-dash me-2"></i>การลา</a>
+        <a class="nav-link" href="#logs" data-page="logs"><i class="bi bi-calendar-check me-2"></i>บันทึกเวลา</a>
+        <a class="nav-link" href="#missing" data-page="missing"><i class="bi bi-exclamation-triangle me-2"></i>ลืมลงเวลา</a>
+        <a class="nav-link" href="#reports" data-page="reports"><i class="bi bi-file-earmark-bar-graph me-2"></i>รายงาน</a>
+        <a class="nav-link" href="#payroll" data-page="payroll"><i class="bi bi-cash-coin me-2"></i>ค่าจ้าง</a>
+        <a class="nav-link" href="#settings" data-page="settings"><i class="bi bi-gear-fill me-2"></i>ตั้งค่า</a>
+      </nav>
+      <div class="mt-auto text-white-50 small px-2 pt-5"><i class="bi bi-person-circle me-1"></i>ผู้ดูแลระบบ</div>
+    </aside>
+
+    <main class="flex-grow-1 p-3 p-lg-4">
+      <header class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h1 class="h3 fw-bold mb-1" id="pageTitle">ภาพรวมวันนี้</h1>
+          <p class="text-secondary mb-0" id="pageSubtitle">กำลังโหลดวันที่...</p>
+          <small class="text-secondary" id="lastUpdated"></small>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary" id="refreshBtn"><i class="bi bi-arrow-clockwise"></i><span class="d-none d-sm-inline ms-1">รีเฟรช</span></button>
+          <button class="btn btn-success" id="addEmployeeBtn"><i class="bi bi-person-plus-fill me-1"></i>เพิ่มพนักงาน</button>
+          <button class="btn btn-success d-none" id="addShiftBtn"><i class="bi bi-plus-circle me-1"></i>เพิ่มกะ</button>
+          <button class="btn btn-success d-none" id="addDeptBtn"><i class="bi bi-plus-circle me-1"></i>เพิ่มแผนก</button>
+          <button class="btn btn-outline-success d-none" id="addSiteBtn"><i class="bi bi-geo-alt me-1"></i>เพิ่มสถานที่ทำงาน</button>
+          <button class="btn btn-outline-success d-none" id="addTypeBtn"><i class="bi bi-plus-circle me-1"></i>เพิ่มประเภทพนักงาน</button>
+        </div>
+      </header>
+
+      <!-- หน้า ภาพรวม -->
+      <div id="view-overview">
+        <section class="row g-3 mb-4">
+          <div class="col-sm-6 col-xl-3"><div class="stat-card card card-body"><div class="d-flex align-items-center justify-content-between"><div><div class="text-secondary small">พนักงานทั้งหมด</div><div class="fs-3 fw-bold" id="employeeCount">–</div></div><div class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-people-fill"></i></div></div></div></div>
+          <div class="col-sm-6 col-xl-3"><div class="stat-card card card-body"><div class="d-flex align-items-center justify-content-between"><div><div class="text-secondary small">เข้างานแล้ว</div><div class="fs-3 fw-bold" id="checkedInCount">–</div></div><div class="stat-icon bg-success-subtle text-success"><i class="bi bi-box-arrow-in-right"></i></div></div></div></div>
+          <div class="col-sm-6 col-xl-3"><div class="stat-card card card-body"><div class="d-flex align-items-center justify-content-between"><div><div class="text-secondary small">มาสายวันนี้</div><div class="fs-3 fw-bold" id="lateCount">–</div></div><div class="stat-icon bg-danger-subtle text-danger"><i class="bi bi-alarm"></i></div></div></div></div>
+          <div class="col-sm-6 col-xl-3"><div class="stat-card card card-body"><div class="d-flex align-items-center justify-content-between"><div><div class="text-secondary small">รอการลงเวลา</div><div class="fs-3 fw-bold" id="waitingCount">–</div></div><div class="stat-icon bg-warning-subtle text-warning"><i class="bi bi-hourglass-split"></i></div></div></div></div>
+        </section>
+        <section class="table-card card">
+          <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center pt-4 px-4">
+            <div><h2 class="h5 fw-bold mb-0">รายการลงเวลาล่าสุด</h2><small class="text-secondary">5 รายการล่าสุดของวันนี้</small></div>
+            <a class="btn btn-outline-secondary btn-sm" href="#logs">ดูทั้งหมด <i class="bi bi-arrow-right"></i></a>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th class="ps-4">รหัสพนักงาน</th><th>ชื่อ</th><th>รายการ</th><th>เวลา</th><th class="pe-4">สถานะ</th></tr></thead>
+            <tbody id="recentTable"><tr><td colspan="5" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+        </section>
+      </div>
+
+      <!-- หน้า พนักงาน -->
+      <div id="view-employees" class="d-none">
+        <section class="table-card card">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">รายชื่อพนักงาน</h2>
+            <small class="text-secondary" id="employeesSummary">กำลังโหลดข้อมูล...</small>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-4">รหัส</th><th>ชื่อ-นามสกุล</th><th>แผนก</th><th>ประเภท</th><th>เบอร์โทร</th><th>กะการทำงาน</th>
+              <th>วันที่เริ่มงาน</th><th>เชื้อชาติ</th><th>สถานะ LINE</th><th>สถานะ</th><th class="pe-4"></th>
+            </tr></thead>
+            <tbody id="employeesTable"><tr><td colspan="11" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>คลิกที่แถวเพื่อดูและแก้ไขรายละเอียดพนักงาน เช่น ที่อยู่ เลขที่บัตรประชาชน และกะการทำงาน</small></div>
+        </section>
+      </div>
+
+      <!-- หน้า กะการทำงาน -->
+      <div id="view-shifts" class="d-none">
+        <section class="table-card card">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">กะการทำงาน</h2>
+            <small class="text-secondary" id="shiftsSummary">กำลังโหลดข้อมูล...</small>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-4">ชื่อกะ</th><th>เวลาเข้างาน</th><th>เวลาออกงาน</th>
+              <th>อนุโลมสาย</th><th>เวลาพัก</th><th>พนักงานในกะ</th><th>สถานะ</th><th class="pe-4"></th>
+            </tr></thead>
+            <tbody id="shiftsTable"><tr><td colspan="8" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>เวลาอนุโลมสายคือช่วงที่ยังนับว่าตรงเวลา เช่น กะเข้า 08:00 อนุโลม 15 นาที ลงเวลา 08:15 ถือว่าตรงเวลา แต่ 08:16 จะนับว่าสาย 1 นาที</small></div>
+        </section>
+      </div>
+
+      <!-- หน้า ตารางการทำงาน -->
+      <div id="view-schedule" class="d-none">
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+              <div>
+                <h2 class="h5 fw-bold mb-0">ใครอยู่กะไหน</h2>
+                <small class="text-secondary" id="weekSummary">กำลังโหลดข้อมูล...</small>
+              </div>
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" id="weekPrev" title="สัปดาห์ก่อน"><i class="bi bi-chevron-left"></i></button>
+                <button class="btn btn-outline-secondary" id="weekToday">สัปดาห์นี้</button>
+                <button class="btn btn-outline-secondary" id="weekNext" title="สัปดาห์ถัดไป"><i class="bi bi-chevron-right"></i></button>
+              </div>
+            </div>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table align-middle mb-0">
+            <thead class="table-light"><tr id="weekHead"></tr></thead>
+            <tbody id="weekBody"><tr><td class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+            <tfoot id="weekFoot"></tfoot>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><div class="d-flex flex-wrap gap-3 small" id="weekLegend"></div></div>
+        </section>
+
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">ตั้งกะล่วงหน้าเป็นช่วง</h2>
+            <small class="text-secondary" id="bulkSummary">ตั้งกะทั้งสัปดาห์ให้หลายคนพร้อมกันในครั้งเดียว</small>
+          </div>
+          <div class="card-body px-4 pb-4">
+            <div class="row g-3">
+              <div class="col-lg-4">
+                <label class="form-label">ช่วงวันที่</label>
+                <div class="d-flex gap-2 mb-2">
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="bulkThisWeek">สัปดาห์นี้</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="bulkNextWeek">สัปดาห์หน้า</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="bulkWeekAfter">อีก 2 สัปดาห์</button>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                  <input class="form-control form-control-sm" type="date" id="bulkFrom">
+                  <span class="text-secondary small">ถึง</span>
+                  <input class="form-control form-control-sm" type="date" id="bulkTo">
+                </div>
+              </div>
+              <div class="col-lg-4">
+                <label class="form-label">วันในสัปดาห์</label>
+                <div class="d-flex gap-2 mb-2">
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="bulkAllDays">ทุกวัน</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="bulkWorkDays">จันทร์–ศุกร์</button>
+                </div>
+                <div class="d-flex flex-wrap gap-2" id="bulkWeekdays"></div>
+              </div>
+              <div class="col-lg-4">
+                <label class="form-label" for="bulkShift">กะที่จะใช้</label>
+                <select class="form-select form-select-sm mb-2" id="bulkShift"></select>
+                <label class="form-label" for="bulkNote">หมายเหตุ</label>
+                <input class="form-control form-control-sm" id="bulkNote" maxlength="160" placeholder="เช่น สัปดาห์หน้าเข้ากะดึก">
+              </div>
+              <div class="col-12">
+                <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                  <label class="form-label mb-0" for="bulkDepartment">พนักงาน</label>
+                  <select class="form-select form-select-sm" id="bulkDepartment" style="width:14rem"></select>
+                  <span class="form-check mb-0 ms-2">
+                    <input class="form-check-input" type="checkbox" id="bulkSelectAll">
+                    <label class="form-check-label small text-secondary" for="bulkSelectAll">เลือกทั้งหมดในกลุ่มนี้</label>
+                  </span>
+                  <span class="small text-secondary" id="bulkSelectedCount"></span>
+                </div>
+                <div class="d-flex flex-wrap gap-3 border rounded p-3" id="bulkEmployees" style="max-height:11rem; overflow-y:auto"></div>
+              </div>
+              <div class="col-12 d-flex flex-wrap gap-2 align-items-center">
+                <button class="btn btn-success" id="bulkSetBtn"><i class="bi bi-calendar-plus me-1"></i>ตั้งกะตามช่วงนี้</button>
+                <button class="btn btn-outline-danger" id="bulkClearBtn"><i class="bi bi-eraser me-1"></i>ล้างการแก้รายวันในช่วงนี้</button>
+                <span class="small" id="bulkPreview"></span>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>เขียนลงตารางรายวัน จึงทับตารางประจำสัปดาห์เฉพาะช่วงที่เลือก และไม่กระทบสถิติของวันที่ผ่านมา ถ้าเลือกกะเป็น วันหยุด จะตั้งเป็นวันหยุดทั้งช่วง</small></div>
+        </section>
+
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center pt-4 px-4">
+            <div>
+              <h2 class="h5 fw-bold mb-0">ตารางประจำสัปดาห์</h2>
+              <small class="text-secondary" id="weeklySummary">กำลังโหลดข้อมูล...</small>
+            </div>
+            <button class="btn btn-success btn-sm" id="saveWeeklyBtn" disabled><i class="bi bi-save me-1"></i>บันทึกตารางสัปดาห์</button>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-4">พนักงาน</th><th>จันทร์</th><th>อังคาร</th><th>พุธ</th><th>พฤหัส</th>
+              <th>ศุกร์</th><th>เสาร์</th><th>อาทิตย์</th><th class="pe-4"></th>
+            </tr></thead>
+            <tbody id="weeklyTable"><tr><td colspan="9" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>เลือกกะของแต่ละวัน ใช้ซ้ำทุกสัปดาห์ วันที่เลือก วันหยุด จะไม่คิดสายและติดป้ายนอกตารางถ้ามีคนลงเวลา ปุ่มถังขยะคือล้างตารางสัปดาห์ กลับไปใช้กะประจำของพนักงาน</small></div>
+        </section>
+
+        <section class="table-card card">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+              <div>
+                <h2 class="h5 fw-bold mb-0">ตารางรายวัน</h2>
+                <small class="text-secondary" id="daySummary">กำลังโหลดข้อมูล...</small>
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                <input class="form-control form-control-sm" type="date" id="dayDate" style="width:11rem">
+                <button class="btn btn-success btn-sm" id="saveDayBtn" disabled><i class="bi bi-save me-1"></i>บันทึกตารางวันนี้</button>
+              </div>
+            </div>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-4">รหัส</th><th>ชื่อ-นามสกุล</th><th>ตารางตั้งต้น</th>
+              <th>กะของวันนี้</th><th>หมายเหตุ</th><th>ที่มา</th><th class="pe-4"></th>
+            </tr></thead>
+            <tbody id="dayTable"><tr><td colspan="7" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>ใช้เมื่อมีการสลับเวร เข้าแทนเพื่อน หรือหยุดชดเชยเฉพาะวัน ค่าที่บันทึกที่นี่จะทับตารางประจำสัปดาห์ ปุ่มถังขยะคือยกเลิกการแก้ไขรายวัน กลับไปใช้ตารางสัปดาห์</small></div>
+        </section>
+      </div>
+
+      <!-- หน้า การลา -->
+      <div id="view-leaves" class="d-none">
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">บันทึกการลา</h2>
+            <small class="text-secondary" id="leaveFormSummary">เลือกพนักงาน ช่วงวันที่ และประเภทการลา</small>
+          </div>
+          <div class="card-body px-4 pb-4">
+            <div class="row g-3">
+              <div class="col-lg-4">
+                <label class="form-label">ช่วงวันที่ลา</label>
+                <div class="d-flex gap-2 align-items-center">
+                  <input class="form-control form-control-sm" type="date" id="leaveFrom">
+                  <span class="text-secondary small">ถึง</span>
+                  <input class="form-control form-control-sm" type="date" id="leaveTo">
+                </div>
+                <div class="form-text">ลาวันเดียวใส่วันที่เดียวกันทั้งสองช่อง</div>
+              </div>
+              <div class="col-lg-4">
+                <label class="form-label" for="leaveType">ประเภทการลา</label>
+                <select class="form-select form-select-sm" id="leaveType"></select>
+              </div>
+              <div class="col-lg-4">
+                <label class="form-label" for="leaveNote">หมายเหตุ</label>
+                <input class="form-control form-control-sm" id="leaveNote" maxlength="160" placeholder="เช่น ใบรับรองแพทย์">
+              </div>
+              <div class="col-12">
+                <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                  <label class="form-label mb-0" for="leaveDepartment">พนักงาน</label>
+                  <select class="form-select form-select-sm" id="leaveDepartment" style="width:14rem"></select>
+                  <span class="form-check mb-0 ms-2">
+                    <input class="form-check-input" type="checkbox" id="leaveSelectAll">
+                    <label class="form-check-label small text-secondary" for="leaveSelectAll">เลือกทั้งหมดในกลุ่มนี้</label>
+                  </span>
+                  <span class="small text-secondary" id="leaveSelectedCount"></span>
+                </div>
+                <div class="d-flex flex-wrap gap-3 border rounded p-3" id="leaveEmployees" style="max-height:11rem; overflow-y:auto"></div>
+              </div>
+              <div class="col-12 d-flex flex-wrap gap-2 align-items-center">
+                <button class="btn btn-success" id="leaveSaveBtn"><i class="bi bi-person-dash me-1"></i>บันทึกการลา</button>
+                <span class="small text-secondary" id="leavePreview"></span>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>วันที่ลาจะไม่คิดสายและไม่นับขาดงานในรายงาน และแสดงประเภทการลาในช่องสถานะ</small></div>
+        </section>
+
+        <section class="table-card card">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+              <div>
+                <h2 class="h5 fw-bold mb-0">รายการลาที่บันทึกไว้</h2>
+                <small class="text-secondary" id="leaveListSummary">กำลังโหลดข้อมูล...</small>
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                <input class="form-control form-control-sm" type="date" id="leaveListFrom" style="width:10rem">
+                <span class="text-secondary small">ถึง</span>
+                <input class="form-control form-control-sm" type="date" id="leaveListTo" style="width:10rem">
+              </div>
+            </div>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th class="ps-4">วันที่</th><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>ประเภท</th><th>หมายเหตุ</th><th class="pe-4"></th></tr></thead>
+            <tbody id="leaveTable"><tr><td colspan="6" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+        </section>
+      </div>
+
+      <!-- หน้า บันทึกเวลา -->
+      <div id="view-logs" class="d-none">
+        <section class="table-card card">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">รายการลงเวลาวันนี้</h2>
+            <small class="text-secondary" id="logsSummary">กำลังโหลดข้อมูล...</small>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th class="ps-4">รหัสพนักงาน</th><th>ชื่อ</th><th>รายการ</th><th>เวลา</th><th>กะการทำงาน</th><th>สถานะ</th><th>ตำแหน่ง</th><th class="pe-4">หมายเหตุ</th></tr></thead>
+            <tbody id="logsTable"><tr><td colspan="8" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+        </section>
+      </div>
+
+      <!-- หน้า ลืมลงเวลา -->
+      <div id="view-missing" class="d-none">
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+              <div>
+                <h2 class="h5 fw-bold mb-0">พนักงานลืมลงเวลาเข้าออก</h2>
+                <small class="text-secondary" id="missingSummary">กำลังโหลดข้อมูล...</small>
+              </div>
+              <div class="d-flex flex-wrap gap-2 align-items-center">
+                <button class="btn btn-outline-secondary btn-sm" id="missingLast7">7 วันล่าสุด</button>
+                <button class="btn btn-outline-secondary btn-sm" id="missingThisMonth">เดือนนี้</button>
+                <input class="form-control form-control-sm" type="date" id="missingFrom" style="width:9.5rem">
+                <span class="text-secondary small">ถึง</span>
+                <input class="form-control form-control-sm" type="date" id="missingTo" style="width:9.5rem">
+                <select class="form-select form-select-sm" id="missingDepartment" style="width:12rem"></select>
+                <select class="form-select form-select-sm" id="missingEmployee" style="width:13rem"></select>
+              </div>
+            </div>
+            <div class="mt-3" style="max-width:32rem">
+              <label class="form-label small mb-1" for="missingNote">หมายเหตุที่จะบันทึกไปกับทุกรายการ</label>
+              <input class="form-control form-control-sm" id="missingNote" maxlength="160" placeholder="เช่น ลืมสแกน หัวหน้ายืนยันแล้ว">
+            </div>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-4">วันที่</th><th>พนักงาน</th><th>กะ</th><th>เข้า</th><th>ออก</th><th>ปัญหา</th><th class="pe-4">เติมเวลาย้อนหลัง</th>
+            </tr></thead>
+            <tbody id="missingTable"><tr><td colspan="7" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>แสดงเฉพาะวันที่ผ่านมาแล้วและเป็นวันทำงานตามตาราง วันนี้ยังไม่นับเพราะอาจยังไม่เลิกงาน วันที่ลาและวันหยุดไม่นับ ช่องเวลาถูกเติมค่าจากกะไว้ให้แล้ว แก้ได้ก่อนกดบันทึก</small></div>
+        </section>
+
+        <section class="table-card card">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">รายการที่บันทึกย้อนหลัง</h2>
+            <small class="text-secondary" id="manualSummary">กำลังโหลดข้อมูล...</small>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th class="ps-4">วันที่</th><th>พนักงาน</th><th>รายการ</th><th>เวลา</th><th>หมายเหตุ</th><th>บันทึกเมื่อ</th><th class="pe-4"></th></tr></thead>
+            <tbody id="manualTable"><tr><td colspan="7" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-shield-check me-1"></i>ลบได้เฉพาะรายการที่ผู้ดูแลบันทึกย้อนหลัง การสแกนจริงจาก LINE ลบไม่ได้เพื่อเก็บเป็นหลักฐาน</small></div>
+        </section>
+      </div>
+
+      <!-- หน้า รายงาน -->
+      <div id="view-reports" class="d-none">
+        <section class="table-card card">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+              <div>
+                <h2 class="h5 fw-bold mb-0">รายงานการลงเวลา</h2>
+                <small class="text-secondary" id="reportSummary">กำลังโหลดข้อมูล...</small>
+              </div>
+              <div class="d-flex flex-wrap gap-2 align-items-center">
+                <button class="btn btn-outline-secondary btn-sm" id="reportThisMonth">เดือนนี้</button>
+                <button class="btn btn-outline-secondary btn-sm" id="reportLastMonth">เดือนที่แล้ว</button>
+                <button class="btn btn-outline-secondary btn-sm" id="reportLast7">7 วันล่าสุด</button>
+                <input class="form-control form-control-sm" type="date" id="reportFrom" style="width:9.5rem">
+                <span class="text-secondary small">ถึง</span>
+                <input class="form-control form-control-sm" type="date" id="reportTo" style="width:9.5rem">
+                <select class="form-select form-select-sm" id="reportDepartment" style="width:12rem"></select>
+                <select class="form-select form-select-sm" id="reportEmployee" style="width:13rem"></select>
+                <button class="btn btn-success btn-sm" id="reportCsvBtn"><i class="bi bi-download me-1"></i>CSV</button>
+              </div>
+            </div>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0" style="font-size:.92rem">
+            <thead class="table-light"><tr>
+              <th class="ps-4">วันที่</th><th>พนักงาน</th><th>แผนก</th><th>สถานะ</th><th>กะ เข้า-ออก</th>
+              <th>เข้า</th><th>ออก</th><th class="text-end">สาย</th><th class="text-end">ออกก่อน</th>
+              <th class="text-end">OT</th><th class="text-end">พัก</th><th class="text-end">เวลาทำ</th><th class="pe-4">หมายเหตุ</th>
+            </tr></thead>
+            <tbody id="reportTable"><tr><td colspan="13" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+            <tfoot id="reportFoot"></tfoot>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>เวลาทำ คือเวลาออกลบเวลาเข้าแล้วหักเวลาพักของกะ สาย คือเข้างานช้ากว่าเวลากะหลังหักเวลาอนุโลม OT คือออกงานช้ากว่าเวลาเลิกกะ วันที่ลาจะไม่คิดสายและไม่นับขาดงาน</small></div>
+        </section>
+      </div>
+
+      <!-- หน้า ค่าจ้าง -->
+      <div id="view-payroll" class="d-none">
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+              <div>
+                <h2 class="h5 fw-bold mb-0">อนุมัติ OT</h2>
+                <small class="text-secondary" id="otSummary">กำลังโหลดข้อมูล...</small>
+              </div>
+              <div class="d-flex flex-wrap gap-2 align-items-center">
+                <input class="form-control form-control-sm" id="otBulkNote" maxlength="160" placeholder="หมายเหตุที่จะใส่ให้ทุกรายการ" style="width:16rem">
+                <button class="btn btn-success btn-sm" id="otApproveAllBtn"><i class="bi bi-check2-all me-1"></i>อนุมัติทั้งหมดที่รออยู่</button>
+              </div>
+            </div>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0" style="font-size:.92rem">
+            <thead class="table-light"><tr>
+              <th class="ps-4">วันที่</th><th>พนักงาน</th><th>กะ</th><th>ออกงาน</th>
+              <th class="text-end">OT ที่คิดได้</th><th>อนุมัติ (นาที)</th><th>หมายเหตุ</th><th>สถานะ</th><th class="pe-4"></th>
+            </tr></thead>
+            <tbody id="otTable"><tr><td colspan="9" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>OT คิดจากเวลาที่สแกนออกหลังเวลาเลิกกะ แต่<strong>จะไม่จ่ายเงินจนกว่าจะกดอนุมัติ</strong> · <i class="bi bi-check2"></i> อนุมัติ (แก้ช่องนาทีให้น้อยลงเพื่ออนุมัติบางส่วน) · <i class="bi bi-x-lg"></i> <strong>ไม่อนุมัติ</strong> บันทึกว่าตรวจแล้วและไม่จ่าย พร้อมเหตุผลในช่องหมายเหตุ · <i class="bi bi-arrow-counterclockwise"></i> ล้างการตัดสินใจกลับเป็นรออนุมัติ · ปุ่ม อนุมัติทั้งหมด จะข้ามรายการที่ตัดสินใจไปแล้วทั้งอนุมัติและไม่อนุมัติ</small></div>
+        </section>
+
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+              <div>
+                <h2 class="h5 fw-bold mb-0">รายการค่าใช้จ่ายที่พนักงานส่งมา</h2>
+                <small class="text-secondary" id="claimSummary">กำลังโหลดข้อมูล...</small>
+              </div>
+              <select class="form-select form-select-sm" id="claimStatusFilter" style="width:12rem">
+                <option value="">ทุกสถานะ</option>
+                <option value="pending">เฉพาะรอตรวจ</option>
+                <option value="approved">เฉพาะอนุมัติแล้ว</option>
+                <option value="rejected">เฉพาะไม่อนุมัติ</option>
+              </select>
+            </div>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0" style="font-size:.92rem">
+            <thead class="table-light"><tr>
+              <th class="ps-4">วันที่</th><th>พนักงาน</th><th>ประเภท</th><th>รายละเอียด</th>
+              <th class="text-end">ยอดที่ขอ</th><th>อนุมัติ (บาท)</th><th>หมายเหตุผู้ตรวจ</th><th>สถานะ</th><th class="pe-4"></th>
+            </tr></thead>
+            <tbody id="claimTable"><tr><td colspan="9" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>พนักงานส่งรายการเข้ามาจากหน้า LINE ได้เฉพาะคนที่เปิดสิทธิ์ไว้ที่หน้า พนักงาน · <i class="bi bi-check2"></i> อนุมัติตามยอดในช่อง (แก้ให้น้อยลงได้) · <i class="bi bi-x-lg"></i> ไม่อนุมัติ พร้อมเหตุผลในช่องหมายเหตุ พนักงานจะเห็นเหตุผลในหน้าของตัวเอง · ยอดที่อนุมัติยังไม่ถูกนำไปรวมกับค่าจ้างอัตโนมัติ ถ้าจะจ่ายคืนให้บันทึกเป็นรายการจ่ายเงินด้านล่าง</small></div>
+        </section>
+
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+              <div>
+                <h2 class="h5 fw-bold mb-0">คำนวณค่าจ้าง</h2>
+                <small class="text-secondary" id="payrollSummary">กำลังโหลดข้อมูล...</small>
+              </div>
+              <div class="d-flex flex-wrap gap-2 align-items-center">
+                <button class="btn btn-outline-secondary btn-sm" id="payrollThisMonth">เดือนนี้</button>
+                <button class="btn btn-outline-secondary btn-sm" id="payrollLastMonth">เดือนที่แล้ว</button>
+                <input class="form-control form-control-sm" type="date" id="payrollFrom" style="width:9.5rem">
+                <span class="text-secondary small">ถึง</span>
+                <input class="form-control form-control-sm" type="date" id="payrollTo" style="width:9.5rem">
+                <select class="form-select form-select-sm" id="payrollDepartment" style="width:12rem"></select>
+                <select class="form-select form-select-sm" id="payrollEmployee" style="width:13rem"></select>
+                <button class="btn btn-success btn-sm" id="payrollCsvBtn"><i class="bi bi-download me-1"></i>CSV</button>
+              </div>
+            </div>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0" style="font-size:.92rem">
+            <thead class="table-light"><tr>
+              <th class="ps-4">พนักงาน</th><th>ประเภท</th>
+              <th class="text-end">ทำงาน</th><th class="text-end">ขาด</th><th class="text-end">ลา</th>
+              <th class="text-end">ค่าแรง</th><th class="text-end">OT</th><th class="text-end">หัก</th>
+              <th class="text-end">ยอดสุทธิ</th><th class="text-end">เบิก</th><th class="text-end">จ่ายแล้ว</th>
+              <th class="text-end pe-4">คงเหลือ</th>
+            </tr></thead>
+            <tbody id="payrollTable"><tr><td colspan="12" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+            <tfoot id="payrollFoot"></tfoot>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>รายวันจ่ายตามจำนวนวันที่มาทำงาน รายเดือนจ่ายเต็มเดือนแล้วหักวันขาดงานตามฐานวันต่อเดือน OT คิดจากค่าแรงต่อชั่วโมงคูณอัตรา OT ของประเภท ชี้เมาส์ที่ตัวเลขเพื่อดูที่มาของยอด แก้กฎได้ที่หน้าตั้งค่า</small></div>
+        </section>
+
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">บันทึกการเบิกและการจ่ายเงิน</h2>
+            <small class="text-secondary" id="entryFormSummary">เลือกพนักงาน วันที่ ประเภทรายการ และจำนวนเงิน</small>
+          </div>
+          <div class="card-body px-4 pb-4">
+            <div class="row g-3">
+              <div class="col-lg-3">
+                <label class="form-label" for="entryEmployee">พนักงาน <span class="text-danger">*</span></label>
+                <select class="form-select form-select-sm" id="entryEmployee"></select>
+              </div>
+              <div class="col-lg-2">
+                <label class="form-label" for="entryDate">วันที่ <span class="text-danger">*</span></label>
+                <input class="form-control form-control-sm" type="date" id="entryDate">
+              </div>
+              <div class="col-lg-2">
+                <label class="form-label" for="entryKind">ประเภทรายการ</label>
+                <select class="form-select form-select-sm" id="entryKind">
+                  <option value="advance">เบิกล่วงหน้า</option>
+                  <option value="payment">จ่ายเงิน</option>
+                </select>
+              </div>
+              <div class="col-lg-2">
+                <label class="form-label" for="entryAmount">จำนวนเงิน (บาท) <span class="text-danger">*</span></label>
+                <input class="form-control form-control-sm" type="number" id="entryAmount" min="0.01" max="10000000" step="0.01" placeholder="0.00">
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label" for="entryMethod">ช่องทาง</label>
+                <input class="form-control form-control-sm" id="entryMethod" list="methodOptions" maxlength="20" placeholder="เช่น เงินสด">
+                <datalist id="methodOptions"><option value="เงินสด"></option><option value="โอน"></option><option value="เช็ค"></option></datalist>
+              </div>
+              <div class="col-lg-9">
+                <label class="form-label" for="entryNote">หมายเหตุ</label>
+                <input class="form-control form-control-sm" id="entryNote" maxlength="160" placeholder="เช่น เบิกค่าเดินทาง">
+              </div>
+              <div class="col-lg-3 d-flex align-items-end">
+                <button class="btn btn-success w-100" id="entrySaveBtn"><i class="bi bi-plus-circle me-1"></i>บันทึกรายการ</button>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>เบิกล่วงหน้าและจ่ายเงินจะถูกหักออกจากยอดสุทธิของช่วงที่วันที่รายการอยู่ในนั้น ทำให้ช่อง คงเหลือ บอกว่ายังต้องจ่ายอีกเท่าไร</small></div>
+        </section>
+
+        <section class="table-card card">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+              <div>
+                <h2 class="h5 fw-bold mb-0">รายการเบิกและจ่ายเงิน</h2>
+                <small class="text-secondary" id="entryListSummary">กำลังโหลดข้อมูล...</small>
+              </div>
+              <select class="form-select form-select-sm" id="entryKindFilter" style="width:12rem">
+                <option value="">ทั้งเบิกและจ่าย</option>
+                <option value="advance">เฉพาะเบิกล่วงหน้า</option>
+                <option value="payment">เฉพาะจ่ายเงิน</option>
+              </select>
+            </div>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th class="ps-4">วันที่</th><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>ประเภท</th><th class="text-end">จำนวนเงิน</th><th>ช่องทาง</th><th>หมายเหตุ</th><th class="pe-4"></th></tr></thead>
+            <tbody id="entryTable"><tr><td colspan="8" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+        </section>
+      </div>
+
+      <!-- หน้า ตั้งค่า -->
+      <div id="view-settings" class="d-none">
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">สถานที่ทำงาน (ตรวจพิกัดตอนลงเวลา)</h2>
+            <small class="text-secondary" id="sitesSummary">กำลังโหลดข้อมูล...</small>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-4">ชื่อสถานที่</th><th>พิกัด</th><th class="text-end">รัศมี</th><th>หมายเหตุ</th><th>สถานะ</th><th class="pe-4"></th>
+            </tr></thead>
+            <tbody id="sitesTable"><tr><td colspan="6" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>เมื่อพนักงานลงเวลาผ่านหน้า LIFF ระบบจะวัดระยะจากสถานที่ที่ใกล้ที่สุด ถ้าเกินรัศมีจะติดป้าย นอกพื้นที่ ให้เห็นในบันทึกเวลา · ถ้าไม่มีสถานที่ในตารางนี้เลย ระบบจะเก็บพิกัดไว้แต่ไม่ตรวจว่าอยู่ในพื้นที่หรือไม่ · หาพิกัดได้จาก Google Maps คลิกขวาที่จุดที่ต้องการแล้วคัดลอกเลขสองชุด</small></div>
+        </section>
+
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">แผนก / กลุ่มงาน</h2>
+            <small class="text-secondary" id="deptsSummary">กำลังโหลดข้อมูล...</small>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-4">ชื่อแผนก</th><th>หมายเหตุ</th><th>พนักงาน</th><th>สถานะ</th><th class="pe-4"></th>
+            </tr></thead>
+            <tbody id="deptsTable"><tr><td colspan="5" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>กำหนดแผนกให้พนักงานได้ที่หน้า พนักงาน คลิกที่แถวแล้วเลือกในช่อง แผนก ใช้กรองรายงาน ค่าจ้าง และรายการลืมลงเวลาได้ คลิกที่แถวในตารางนี้เพื่อแก้ไข</small></div>
+        </section>
+
+        <section class="table-card card">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">ประเภทพนักงาน</h2>
+            <small class="text-secondary" id="typesSummary">กำลังโหลดข้อมูล...</small>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-4">ชื่อประเภท</th><th>วิธีจ่ายค่าตอบแทน</th><th class="text-end">อัตรา</th>
+              <th>กฎคำนวณ</th><th>หมายเหตุ</th><th>พนักงาน</th><th>สถานะ</th><th class="pe-4"></th>
+            </tr></thead>
+            <tbody id="typesTable"><tr><td colspan="8" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>สร้างประเภทพนักงานแล้วกำหนดให้แต่ละคนได้ที่หน้า พนักงาน คลิกที่แถวแล้วเลือกในช่อง ประเภทพนักงาน คลิกที่แถวในตารางนี้เพื่อแก้ไข</small></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal fade" id="employeeModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><form class="modal-content" id="employeeForm">
+    <div class="modal-header">
+      <div>
+        <h2 class="modal-title fs-5" id="modalTitle">เพิ่มพนักงาน</h2>
+        <small class="text-secondary" id="modalSubtitle">กรอกข้อมูลพนักงานใหม่</small>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="employeeId">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label" for="employeeCode">รหัสพนักงาน <span class="text-danger">*</span></label>
+          <input class="form-control" id="employeeCode" required placeholder="เช่น E001">
+          <div class="form-text d-none" id="employeeCodeHint">รหัสพนักงานแก้ไขไม่ได้</div>
+        </div>
+        <div class="col-md-8">
+          <label class="form-label" for="employeeName">ชื่อ-นามสกุล <span class="text-danger">*</span></label>
+          <input class="form-control" id="employeeName" required placeholder="เช่น สมชาย ใจดี">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="nationalId">เลขที่บัตรประชาชน</label>
+          <input class="form-control" id="nationalId" inputmode="numeric" maxlength="17" placeholder="13 หลัก">
+          <div class="form-text">ใส่ขีดหรือเว้นวรรคได้ ระบบตรวจความถูกต้องของเลขให้อัตโนมัติ</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="phone">เบอร์โทร</label>
+          <input class="form-control" id="phone" inputmode="tel" placeholder="เช่น 081-234-5678">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="deptSelect">แผนก / กลุ่มงาน</label>
+          <select class="form-select" id="deptSelect"><option value="">ไม่กำหนด</option></select>
+          <div class="form-text">ใช้กรองรายงานและค่าจ้าง สร้างแผนกใหม่ได้ที่หน้าตั้งค่า</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="typeSelect">ประเภทพนักงาน</label>
+          <select class="form-select" id="typeSelect"><option value="">ไม่กำหนด</option></select>
+          <div class="form-text">กำหนดวิธีจ่ายค่าตอบแทน สร้างประเภทใหม่ได้ที่หน้าตั้งค่า</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="shiftSelect">กะการทำงาน</label>
+          <select class="form-select" id="shiftSelect"><option value="">ไม่กำหนด</option></select>
+          <div class="form-text">ใช้คำนวณว่ามาสายหรือตรงเวลา ถ้าไม่กำหนดจะไม่คิดสาย</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="startDate">วันที่เริ่มงาน</label>
+          <input class="form-control" id="startDate" type="date">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="ethnicity">เชื้อชาติ</label>
+          <input class="form-control" id="ethnicity" list="ethnicityOptions" placeholder="เช่น ไทย">
+          <datalist id="ethnicityOptions"><option value="ไทย"></option><option value="จีน"></option><option value="ลาว"></option><option value="พม่า"></option><option value="กัมพูชา"></option></datalist>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="address">ที่อยู่</label>
+          <textarea class="form-control" id="address" rows="3" placeholder="บ้านเลขที่ หมู่ ตำบล อำเภอ จังหวัด รหัสไปรษณีย์"></textarea>
+        </div>
+        <div class="col-md-6" id="lineUserIdField">
+          <label class="form-label" for="lineUserId">LINE User ID <span class="text-secondary">(ถ้ามี)</span></label>
+          <input class="form-control" id="lineUserId" placeholder="Uxxxxxxxx">
+          <div class="form-text">ปล่อยว่างได้ พนักงานผูกเองด้วยการพิมพ์ “ลงทะเบียน รหัสพนักงาน” ใน LINE</div>
+        </div>
+        <div class="col-md-6 d-none" id="lineStatusField">
+          <label class="form-label">สถานะบัญชี LINE</label>
+          <div id="lineStatusText" class="pt-1"></div>
+        </div>
+        <div class="col-md-6 d-none" id="expensePermField">
+          <label class="form-label">สิทธิ์ส่งรายการค่าใช้จ่าย</label>
+          <div class="form-check form-switch pt-1">
+            <input class="form-check-input" type="checkbox" id="expensePermToggle">
+            <label class="form-check-label" for="expensePermToggle">ส่งรายการค่าใช้จ่ายผ่าน LINE ได้</label>
+          </div>
+        </div>
+        <div class="col-md-6 d-none" id="activeField">
+          <label class="form-label">สถานะการใช้งาน</label>
+          <div class="form-check form-switch pt-1">
+            <input class="form-check-input" type="checkbox" id="activeToggle" checked>
+            <label class="form-check-label" for="activeToggle">เปิดใช้งาน (ปิดเมื่อพนักงานลาออก)</label>
+          </div>
+        </div>
+      </div>
+      <div id="formError" class="text-danger small mt-3"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-light" data-bs-dismiss="modal">ยกเลิก</button>
+      <button class="btn btn-success" type="submit" id="submitBtn">บันทึกพนักงาน</button>
+    </div>
+  </form></div></div>
+
+  <div class="modal fade" id="shiftModal" tabindex="-1"><div class="modal-dialog"><form class="modal-content" id="shiftForm">
+    <div class="modal-header">
+      <div>
+        <h2 class="modal-title fs-5" id="shiftModalTitle">เพิ่มกะการทำงาน</h2>
+        <small class="text-secondary" id="shiftModalSubtitle">กำหนดเวลาเข้าออกงานของกะ</small>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="shiftRecordId">
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label" for="shiftName">ชื่อกะ <span class="text-danger">*</span></label>
+          <input class="form-control" id="shiftName" required placeholder="เช่น กะเช้า">
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="shiftStart">เวลาเข้างาน <span class="text-danger">*</span></label>
+          <input class="form-control" id="shiftStart" type="time" required>
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="shiftEnd">เวลาออกงาน <span class="text-danger">*</span></label>
+          <input class="form-control" id="shiftEnd" type="time" required>
+          <div class="form-text">กะข้ามคืนใส่เวลาออกน้อยกว่าเวลาเข้าได้ เช่น 22:00 ถึง 06:00</div>
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="shiftGrace">อนุโลมสาย (นาที)</label>
+          <input class="form-control" id="shiftGrace" type="number" min="0" max="240" step="1" value="0">
+          <div class="form-text">ลงเวลาเข้าภายในช่วงนี้ยังนับว่าตรงเวลา</div>
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="shiftBreak">เวลาพัก (นาที)</label>
+          <input class="form-control" id="shiftBreak" type="number" min="0" max="480" step="1" value="60">
+          <div class="form-text">หักออกจากเวลาทำงานในรายงาน</div>
+        </div>
+        <div class="col-12 d-none" id="shiftActiveField">
+          <label class="form-label">สถานะการใช้งาน</label>
+          <div class="form-check form-switch pt-1">
+            <input class="form-check-input" type="checkbox" id="shiftActiveToggle" checked>
+            <label class="form-check-label" for="shiftActiveToggle">เปิดใช้งาน (ปิดเมื่อเลิกใช้กะนี้)</label>
+          </div>
+        </div>
+      </div>
+      <div id="shiftFormError" class="text-danger small mt-3"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-light" data-bs-dismiss="modal">ยกเลิก</button>
+      <button class="btn btn-success" type="submit" id="shiftSubmitBtn">บันทึกกะ</button>
+    </div>
+  </form></div></div>
+
+  <div class="modal fade" id="siteModal" tabindex="-1"><div class="modal-dialog"><form class="modal-content" id="siteForm">
+    <div class="modal-header">
+      <div>
+        <h2 class="modal-title fs-5" id="siteModalTitle">เพิ่มสถานที่ทำงาน</h2>
+        <small class="text-secondary" id="siteModalSubtitle">กำหนดพิกัดและรัศมีที่อนุญาตให้ลงเวลา</small>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="siteRecordId">
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label" for="siteName">ชื่อสถานที่ <span class="text-danger">*</span></label>
+          <input class="form-control" id="siteName" required placeholder="เช่น สำนักงานใหญ่">
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="sitePaste">วางพิกัดจาก Google Maps</label>
+          <input class="form-control" id="sitePaste" placeholder="เช่น 14.977000, 102.083000">
+          <div class="form-text">คลิกขวาที่จุดใน Google Maps แล้วคลิกเลขพิกัดเพื่อคัดลอก จากนั้นวางที่ช่องนี้ วางลิงก์แผนที่ทั้งลิงก์ก็ได้ ระบบจะแยกใส่สองช่องล่างและปัดเป็น 6 ตำแหน่งให้เอง</div>
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="siteLat">ละติจูด <span class="text-danger">*</span></label>
+          <input class="form-control" id="siteLat" type="number" step="any" min="-90" max="90" required>
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="siteLng">ลองจิจูด <span class="text-danger">*</span></label>
+          <input class="form-control" id="siteLng" type="number" step="any" min="-180" max="180" required>
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="siteRadius">รัศมี (เมตร)</label>
+          <input class="form-control" id="siteRadius" type="number" min="20" max="20000" step="10" value="200">
+          <div class="form-text" id="siteRadiusHint">20 ถึง 20,000 เมตร แนะนำ 100 ถึง 200</div>
+        </div>
+        <div class="col-6">
+          <label class="form-label">ตรวจบนแผนที่</label>
+          <a class="btn btn-outline-secondary w-100" id="siteMapLink" target="_blank" rel="noopener">เปิด Google Maps</a>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="siteNote">หมายเหตุ</label>
+          <input class="form-control" id="siteNote" maxlength="160" placeholder="เช่น อาคาร 2 ชั้น 1">
+        </div>
+        <div class="col-12 d-none" id="siteActiveField">
+          <label class="form-label">สถานะการใช้งาน</label>
+          <div class="form-check form-switch pt-1">
+            <input class="form-check-input" type="checkbox" id="siteActiveToggle" checked>
+            <label class="form-check-label" for="siteActiveToggle">เปิดใช้งาน (ปิดเมื่อเลิกใช้สถานที่นี้)</label>
+          </div>
+        </div>
+      </div>
+      <div id="siteFormError" class="text-danger small mt-3"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-light" data-bs-dismiss="modal">ยกเลิก</button>
+      <button class="btn btn-success" type="submit" id="siteSubmitBtn">บันทึกสถานที่</button>
+    </div>
+  </form></div></div>
+
+  <div class="modal fade" id="deptModal" tabindex="-1"><div class="modal-dialog"><form class="modal-content" id="deptForm">
+    <div class="modal-header">
+      <div>
+        <h2 class="modal-title fs-5" id="deptModalTitle">เพิ่มแผนก</h2>
+        <small class="text-secondary" id="deptModalSubtitle">ตั้งชื่อแผนกหรือกลุ่มงาน</small>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="deptRecordId">
+      <div class="mb-3">
+        <label class="form-label" for="deptName">ชื่อแผนก <span class="text-danger">*</span></label>
+        <input class="form-control" id="deptName" required placeholder="เช่น กลุ่มเทคโนโลยีสารสนเทศ">
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="deptNote">หมายเหตุ</label>
+        <input class="form-control" id="deptNote" maxlength="160" placeholder="เช่น ชื่อหัวหน้ากลุ่ม">
+      </div>
+      <div class="d-none" id="deptActiveField">
+        <label class="form-label">สถานะการใช้งาน</label>
+        <div class="form-check form-switch pt-1">
+          <input class="form-check-input" type="checkbox" id="deptActiveToggle" checked>
+          <label class="form-check-label" for="deptActiveToggle">เปิดใช้งาน (ปิดเมื่อยุบแผนก)</label>
+        </div>
+      </div>
+      <div id="deptFormError" class="text-danger small mt-3"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-light" data-bs-dismiss="modal">ยกเลิก</button>
+      <button class="btn btn-success" type="submit" id="deptSubmitBtn">บันทึกแผนก</button>
+    </div>
+  </form></div></div>
+
+  <div class="modal fade" id="typeModal" tabindex="-1"><div class="modal-dialog"><form class="modal-content" id="typeForm">
+    <div class="modal-header">
+      <div>
+        <h2 class="modal-title fs-5" id="typeModalTitle">เพิ่มประเภทพนักงาน</h2>
+        <small class="text-secondary" id="typeModalSubtitle">กำหนดวิธีจ่ายค่าตอบแทนของประเภทนี้</small>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="typeRecordId">
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label" for="typeName">ชื่อประเภท <span class="text-danger">*</span></label>
+          <input class="form-control" id="typeName" required placeholder="เช่น พนักงานรายวัน">
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="typePayType">วิธีจ่ายค่าตอบแทน <span class="text-danger">*</span></label>
+          <select class="form-select" id="typePayType">
+            <option value="daily">รายวัน</option>
+            <option value="monthly">รายเดือน</option>
+          </select>
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="typePayRate">อัตรา (บาท)</label>
+          <input class="form-control" id="typePayRate" type="number" min="0" max="10000000" step="0.01" value="0">
+          <div class="form-text" id="typeRateHint">บาทต่อวัน</div>
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="typeOtMultiplier">อัตรา OT (เท่า)</label>
+          <input class="form-control" id="typeOtMultiplier" type="number" min="0" max="10" step="0.1" value="1.5">
+          <div class="form-text">คูณกับค่าแรงต่อชั่วโมง</div>
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="typeLateDeduct">หักสาย (บาท/นาที)</label>
+          <input class="form-control" id="typeLateDeduct" type="number" min="0" max="10000" step="0.01" value="0">
+          <div class="form-text">ใส่ 0 ถ้าไม่หักเงินเมื่อมาสาย</div>
+        </div>
+        <div class="col-6 d-none" id="typeDivisorField">
+          <label class="form-label" for="typeDivisor">หารเงินเดือนด้วยกี่วัน <span class="text-danger">*</span></label>
+          <input class="form-control" id="typeDivisor" type="number" min="1" max="31" step="1" value="30">
+          <div class="form-text">เงินเดือน ÷ จำนวนวันนี้ = ค่าแรงต่อวัน ใช้ตอนหักวันขาดงานและคิด OT</div>
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="typeWorkHours">ชั่วโมงทำงานต่อวัน</label>
+          <input class="form-control" id="typeWorkHours" type="number" min="0.5" max="24" step="0.5" value="8">
+          <div class="form-text">ใช้หาค่าแรงต่อชั่วโมงสำหรับคิด OT</div>
+        </div>
+        <div class="col-12">
+          <div class="alert alert-light border mb-0 py-2 px-3 small" id="typeRatePreview"></div>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="typeNote">หมายเหตุ</label>
+          <input class="form-control" id="typeNote" maxlength="160" placeholder="เช่น จ่ายทุกวันที่ 5 และ 20">
+        </div>
+        <div class="col-12 d-none" id="typeActiveField">
+          <label class="form-label">สถานะการใช้งาน</label>
+          <div class="form-check form-switch pt-1">
+            <input class="form-check-input" type="checkbox" id="typeActiveToggle" checked>
+            <label class="form-check-label" for="typeActiveToggle">เปิดใช้งาน (ปิดเมื่อเลิกใช้ประเภทนี้)</label>
+          </div>
+        </div>
+      </div>
+      <div id="typeFormError" class="text-danger small mt-3"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-light" data-bs-dismiss="modal">ยกเลิก</button>
+      <button class="btn btn-success" type="submit" id="typeSubmitBtn">บันทึกประเภท</button>
+    </div>
+  </form></div></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+    const formatTime = v => new Intl.DateTimeFormat('th-TH',{dateStyle:'medium',timeStyle:'short'}).format(new Date(v));
+    // start_date เป็นสตริง YYYY-MM-DD จึงต่อ T00:00:00 เพื่อให้อ่านเป็นเวลาท้องถิ่น ไม่ให้วันเลื่อน
+    const formatDay = v => v ? new Intl.DateTimeFormat('th-TH',{dateStyle:'medium'}).format(new Date(`${v}T00:00:00`)) : '';
+    const todayLabel = new Intl.DateTimeFormat('th-TH',{dateStyle:'full'}).format(new Date());
+    const dash = '<span class="text-secondary">–</span>';
+    const formatMoney = value => new Intl.NumberFormat('th-TH',{ minimumFractionDigits:0, maximumFractionDigits:2 }).format(Number(value ?? 0));
+    const payUnit = payType => payType === 'monthly' ? 'บาท/เดือน' : 'บาท/วัน';
+    const payMethod = payType => payType === 'monthly' ? 'รายเดือน' : 'รายวัน';
+
+    // แต่ละหน้าเป็น view แยกกัน สลับด้วย hash ใน URL เช่น #shifts
+    const PAGES = {
+      overview:  { title:'ภาพรวมวันนี้', subtitle:todayLabel,                                   action:'employee' },
+      employees: { title:'พนักงาน',      subtitle:'จัดการรายชื่อและรายละเอียดพนักงาน',           action:'employee' },
+      shifts:    { title:'กะการทำงาน',    subtitle:'กำหนดเวลาเข้าออกงานและเวลาอนุโลมสาย',        action:'shift'    },
+      schedule:  { title:'ตารางการทำงาน', subtitle:'ตั้งตารางประจำสัปดาห์ และแก้เป็นรายวันเมื่อสลับเวร', action:'none'     },
+      leaves:    { title:'การลา',        subtitle:'บันทึกการลาเป็นช่วงวันที่ และดูรายการที่บันทึกไว้', action:'none'     },
+      logs:      { title:'บันทึกเวลา',    subtitle:'รายการลงเวลาเข้าและออกงานของวันนี้',          action:'none'     },
+      missing:   { title:'ลืมลงเวลา',     subtitle:'หาวันที่ลืมสแกน แล้วเติมเวลาย้อนหลังให้ถูกต้อง',  action:'none'     },
+      reports:   { title:'รายงาน',       subtitle:'สรุปเวลาทำงาน สาย OT และการลา คิดตามกะ',      action:'none'     },
+      payroll:   { title:'ค่าจ้าง',       subtitle:'คำนวณค่าจ้าง บันทึกการเบิกและการจ่ายเงิน',      action:'none'     },
+      settings:  { title:'ตั้งค่า',        subtitle:'แผนก ประเภทพนักงาน และวิธีจ่ายค่าตอบแทน',      action:'settings' }
+    };
+
+    let activePage = 'overview';
+
+    function route() {
+      const requested = location.hash.replace('#','');
+      const page = PAGES[requested] ? requested : 'overview';
+      activePage = page;
+      for (const name of Object.keys(PAGES)) document.querySelector(`#view-${name}`).classList.toggle('d-none', name !== page);
+      document.querySelectorAll('.nav-link[data-page]').forEach(link => link.classList.toggle('active', link.dataset.page === page));
+      pageTitle.textContent = PAGES[page].title;
+      pageSubtitle.textContent = PAGES[page].subtitle;
+      addEmployeeBtn.classList.toggle('d-none', PAGES[page].action !== 'employee');
+      addShiftBtn.classList.toggle('d-none', PAGES[page].action !== 'shift');
+      addTypeBtn.classList.toggle('d-none', PAGES[page].action !== 'settings');
+      addDeptBtn.classList.toggle('d-none', PAGES[page].action !== 'settings');
+      addSiteBtn.classList.toggle('d-none', PAGES[page].action !== 'settings');
+      window.scrollTo(0,0);
+    }
+
+    const eventBadge = type => `<span class="badge text-bg-${type==='check_in'?'success':'primary'}">${type==='check_in'?'เข้างาน':'ออกงาน'}</span>`;
+    const lineBadge = linked => linked
+      ? '<span class="badge text-bg-success"><i class="bi bi-check-circle me-1"></i>ผูกแล้ว</span>'
+      : '<span class="badge text-bg-warning"><i class="bi bi-exclamation-circle me-1"></i>ยังไม่ผูก</span>';
+    const activeBadge = active => active
+      ? '<span class="badge text-bg-light border text-secondary">ใช้งาน</span>'
+      : '<span class="badge text-bg-secondary">ปิดใช้งาน</span>';
+    // off_schedule คือลงเวลาในวันที่ตารางบอกว่าหยุด ส่วน late_minutes เป็น null
+    // เมื่อเป็นการลงเวลาออก หรือหากะของวันนั้นไม่ได้
+    const statusBadge = log => log.off_schedule ? '<span class="badge text-bg-warning"><i class="bi bi-calendar-x me-1"></i>นอกตาราง</span>'
+      : log.late_minutes === null || log.late_minutes === undefined ? dash
+      : log.late_minutes > 0 ? `<span class="badge text-bg-danger">สาย ${log.late_minutes} นาที</span>`
+      : '<span class="badge text-bg-success-subtle text-success-emphasis">ตรงเวลา</span>';
+    const sourceBadge = source => ({
+      override: '<span class="badge text-bg-info-subtle text-info-emphasis">แก้รายวัน</span>',
+      weekly: '<span class="badge text-bg-light border text-secondary">ตารางสัปดาห์</span>',
+      default: '<span class="badge text-bg-light border text-secondary">กะประจำ</span>',
+      none: '<span class="badge text-bg-light border text-secondary">ยังไม่ตั้ง</span>'
+    })[source] ?? dash;
+    const WEEKDAY_ORDER = [1,2,3,4,5,6,0];
+    const SOURCE_LABEL = { line:'LINE', liff:'LIFF + GPS', manual:'บันทึกย้อนหลัง' };
+    const mapsLink = (latitude, longitude) => `https://www.google.com/maps?q=${latitude},${longitude}`;
+    // ไม่มีพิกัด = ลงเวลาจากช่องทางที่ไม่ส่งตำแหน่ง จึงบอกแค่ที่มา
+    const locationCell = log => {
+      const source = `<div class="small text-secondary">${esc(SOURCE_LABEL[log.source] ?? log.source ?? '')}</div>`;
+      if (log.latitude === null || log.latitude === undefined) return `${dash}${source}`;
+      const badge = log.inside_site === true
+        ? `<span class="badge text-bg-success-subtle text-success-emphasis"><i class="bi bi-geo-fill me-1"></i>ในพื้นที่ ${esc(log.site_name)}</span>`
+        : log.inside_site === false
+          ? `<span class="badge text-bg-danger"><i class="bi bi-geo me-1"></i>นอกพื้นที่ ${esc(log.distance_m)} ม.</span>`
+          : '<span class="badge text-bg-light border text-secondary">ยังไม่ตั้งสถานที่</span>';
+      const accuracy = log.accuracy_m ? ` · ±${Math.round(log.accuracy_m)} ม.` : '';
+      return `${badge}<div class="small"><a href="${mapsLink(log.latitude, log.longitude)}" target="_blank" rel="noopener">`
+        + `${log.latitude.toFixed(5)}, ${log.longitude.toFixed(5)}</a><span class="text-secondary">${accuracy}</span></div>${source}`;
+    };
+    const emptyRow = (cols,text) => `<tr><td colspan="${cols}" class="text-center text-secondary py-4">${text}</td></tr>`;
+    const errorRow = cols => `<tr><td colspan="${cols}" class="text-center text-danger py-4">ไม่สามารถเชื่อมต่อ API ได้</td></tr>`;
+
+    const employeeModal = new bootstrap.Modal(document.querySelector('#employeeModal'));
+    const shiftModal = new bootstrap.Modal(document.querySelector('#shiftModal'));
+    const typeModal = new bootstrap.Modal(document.querySelector('#typeModal'));
+    const deptModal = new bootstrap.Modal(document.querySelector('#deptModal'));
+    const siteModal = new bootstrap.Modal(document.querySelector('#siteModal'));
+    let employeeList = [];
+    let shiftList = [];
+    let typeList = [];
+    let deptList = [];
+    let siteList = [];
+    let weeklyByEmployee = new Map();
+    const weeklyDirty = new Set();
+    const dayDirty = new Set();
+
+    const bangkokToday = () => new Intl.DateTimeFormat('en-CA',{ timeZone:'Asia/Bangkok' }).format(new Date());
+    // รายชื่อที่แสดงในตัวเลือกพนักงาน กรองตามกลุ่มที่เลือก ค่าว่างคือทุกกลุ่ม
+    const employeesInDepartment = departmentId => departmentId
+      ? employeeList.filter(employee => String(employee.department_id ?? '') === String(departmentId))
+      : employeeList;
+    const setSummary = (element, text, isError = false) => {
+      element.textContent = text;
+      element.classList.toggle('text-danger', isError);
+      element.classList.toggle('text-secondary', !isError);
+    };
+    const shiftOptions = selected => ['<option value="">วันหยุด</option>'].concat(shiftList.map(shift =>
+      `<option value="${esc(shift.id)}"${String(selected ?? '') === String(shift.id) ? ' selected' : ''}>${esc(shift.name)} ${esc(shift.start_time)}</option>`)).join('');
+
+    // ใช้ฟอร์มเดียวทั้งเพิ่มและแก้ไข ถ้ามี employee เข้ามาคือโหมดแก้ไข
+    function openEmployeeForm(employee) {
+      const editing = Boolean(employee);
+      employeeForm.reset();
+      formError.textContent = '';
+      shiftSelect.innerHTML = ['<option value="">ไม่กำหนด</option>']
+        .concat(shiftList.map(s => `<option value="${esc(s.id)}">${esc(s.name)} (${esc(s.start_time)}–${esc(s.end_time)})${s.active ? '' : ' · ปิดใช้งาน'}</option>`)).join('');
+      deptSelect.innerHTML = ['<option value="">ไม่กำหนด</option>']
+        .concat(deptList.map(d => `<option value="${esc(d.id)}">${esc(d.name)}${d.active ? '' : ' · ปิดใช้งาน'}</option>`)).join('');
+      typeSelect.innerHTML = ['<option value="">ไม่กำหนด</option>']
+        .concat(typeList.map(t => `<option value="${esc(t.id)}">${esc(t.name)} · ${payMethod(t.pay_type)} ${formatMoney(t.pay_rate)} ${payUnit(t.pay_type)}${t.active ? '' : ' · ปิดใช้งาน'}</option>`)).join('');
+      employeeId.value = editing ? employee.id : '';
+      employeeCode.value = editing ? employee.employee_code : '';
+      employeeName.value = editing ? employee.name : '';
+      nationalId.value = editing ? (employee.national_id ?? '') : '';
+      phone.value = editing ? (employee.phone ?? '') : '';
+      shiftSelect.value = editing ? (employee.shift_id ?? '') : '';
+      typeSelect.value = editing ? (employee.employee_type_id ?? '') : '';
+      deptSelect.value = editing ? (employee.department_id ?? '') : '';
+      startDate.value = editing ? (employee.start_date ?? '') : '';
+      ethnicity.value = editing ? (employee.ethnicity ?? '') : '';
+      address.value = editing ? (employee.address ?? '') : '';
+      employeeCode.disabled = editing;
+      employeeCodeHint.classList.toggle('d-none', !editing);
+      lineUserIdField.classList.toggle('d-none', editing);
+      lineStatusField.classList.toggle('d-none', !editing);
+      activeField.classList.toggle('d-none', !editing);
+      expensePermField.classList.toggle('d-none', !editing);
+      modalTitle.textContent = editing ? 'รายละเอียดพนักงาน' : 'เพิ่มพนักงาน';
+      modalSubtitle.textContent = editing ? `${employee.employee_code} · ${employee.name}` : 'กรอกข้อมูลพนักงานใหม่';
+      submitBtn.textContent = editing ? 'บันทึกการแก้ไข' : 'บันทึกพนักงาน';
+      if (editing) {
+        activeToggle.checked = employee.active;
+        expensePermToggle.checked = Boolean(employee.can_submit_expense);
+        lineStatusText.innerHTML = employee.line_user_id
+          ? `${lineBadge(true)} <span class="text-secondary small ms-1">พนักงานผูกบัญชีเองผ่าน LINE แล้ว</span>`
+          : `${lineBadge(false)} <span class="text-secondary small ms-1">ให้พนักงานพิมพ์ “ลงทะเบียน ${esc(employee.employee_code)}” ใน LINE</span>`;
+      }
+      employeeModal.show();
+    }
+
+    function openShiftForm(shift) {
+      const editing = Boolean(shift);
+      shiftForm.reset();
+      shiftFormError.textContent = '';
+      shiftRecordId.value = editing ? shift.id : '';
+      shiftName.value = editing ? shift.name : '';
+      shiftStart.value = editing ? shift.start_time : '08:00';
+      shiftEnd.value = editing ? shift.end_time : '17:00';
+      shiftGrace.value = editing ? shift.grace_minutes : 0;
+      shiftBreak.value = editing ? shift.break_minutes : 60;
+      shiftActiveField.classList.toggle('d-none', !editing);
+      shiftModalTitle.textContent = editing ? 'แก้ไขกะการทำงาน' : 'เพิ่มกะการทำงาน';
+      shiftModalSubtitle.textContent = editing
+        ? `${shift.name} · มีพนักงานในกะ ${shift.employee_count} คน`
+        : 'กำหนดเวลาเข้าออกงานของกะ';
+      shiftSubmitBtn.textContent = editing ? 'บันทึกการแก้ไข' : 'บันทึกกะ';
+      if (editing) shiftActiveToggle.checked = shift.active;
+      shiftModal.show();
+    }
+
+    // ตารางประจำสัปดาห์ พนักงานที่ยังไม่ตั้งตารางจะเห็นค่าตั้งต้นเป็นกะประจำของตัวเอง
+    function renderWeekly() {
+      const configured = employeeList.filter(employee => weeklyByEmployee.has(String(employee.id))).length;
+      setSummary(weeklySummary, `พนักงาน ${employeeList.length} คน · ตั้งตารางสัปดาห์แล้ว ${configured} คน · ที่เหลือใช้กะประจำทุกวัน`);
+      weeklyTable.innerHTML = employeeList.length ? employeeList.map(employee => {
+        const days = weeklyByEmployee.get(String(employee.id));
+        return `<tr data-employee-id="${esc(employee.id)}">
+          <td class="ps-4"><div class="fw-semibold">${esc(employee.employee_code)}</div>
+            <div class="small text-secondary">${esc(employee.name)}</div>
+            ${days ? '' : '<span class="badge text-bg-light border text-secondary mt-1">ยังไม่ตั้งตาราง</span>'}</td>
+          ${WEEKDAY_ORDER.map(weekday => `<td><select class="form-select form-select-sm" data-weekday="${weekday}" style="min-width:8.5rem">${shiftOptions(days ? days[weekday] : employee.shift_id)}</select></td>`).join('')}
+          <td class="pe-4 text-end">${days ? `<button type="button" class="btn btn-sm btn-outline-secondary" data-clear-weekly="${esc(employee.id)}" title="ล้างตารางสัปดาห์"><i class="bi bi-trash3"></i></button>` : ''}</td>
+        </tr>`;
+      }).join('') : emptyRow(9,'ยังไม่มีพนักงานในระบบ');
+      weeklyDirty.clear();
+      saveWeeklyBtn.disabled = true;
+      saveWeeklyBtn.innerHTML = '<i class="bi bi-save me-1"></i>บันทึกตารางสัปดาห์';
+    }
+
+    async function loadDaySchedule() {
+      const date = dayDate.value || bangkokToday();
+      try {
+        const data = await fetch(`/api/schedules/day?date=${encodeURIComponent(date)}`).then(r => r.json());
+        const rows = data.employees ?? [];
+        const working = rows.filter(row => row.effective_shift_id).length;
+        const overrides = rows.filter(row => row.has_override).length;
+        setSummary(daySummary, `${formatDay(date)} · เข้างาน ${working} คน · วันหยุด ${rows.length - working} คน · แก้รายวัน ${overrides} รายการ`);
+        dayTable.innerHTML = rows.length ? rows.map(row => `<tr data-employee-id="${esc(row.employee_id)}">
+          <td class="ps-4 fw-semibold">${esc(row.employee_code)}</td>
+          <td>${esc(row.name)}</td>
+          <td>${row.base_shift_name ? esc(row.base_shift_name) : (row.schedule_source === 'none' ? dash : '<span class="text-secondary">วันหยุด</span>')}</td>
+          <td><select class="form-select form-select-sm" data-day-shift style="min-width:9rem">${shiftOptions(row.effective_shift_id)}</select></td>
+          <td><input class="form-control form-control-sm" data-day-note maxlength="160" placeholder="เช่น สลับเวร" value="${esc(row.override_note)}" style="min-width:10rem"></td>
+          <td>${sourceBadge(row.schedule_source)}</td>
+          <td class="pe-4 text-end">${row.has_override ? `<button type="button" class="btn btn-sm btn-outline-secondary" data-clear-override="${esc(row.employee_id)}" title="ยกเลิกการแก้ไขรายวัน"><i class="bi bi-trash3"></i></button>` : ''}</td>
+        </tr>`).join('') : emptyRow(7,'ยังไม่มีพนักงานในระบบ');
+      } catch {
+        setSummary(daySummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        dayTable.innerHTML = errorRow(7);
+      }
+      dayDirty.clear();
+      saveDayBtn.disabled = true;
+      saveDayBtn.innerHTML = '<i class="bi bi-save me-1"></i>บันทึกตารางวันนี้';
+    }
+
+    function openSiteForm(site) {
+      const editing = Boolean(site);
+      siteForm.reset();
+      siteFormError.textContent = '';
+      siteRecordId.value = editing ? site.id : '';
+      siteName.value = editing ? site.name : '';
+      siteLat.value = editing ? site.latitude : '';
+      siteLng.value = editing ? site.longitude : '';
+      siteRadius.value = editing ? site.radius_m : 200;
+      siteNote.value = editing ? (site.note ?? '') : '';
+      sitePaste.value = '';
+      siteActiveField.classList.toggle('d-none', !editing);
+      siteModalTitle.textContent = editing ? 'แก้ไขสถานที่ทำงาน' : 'เพิ่มสถานที่ทำงาน';
+      siteModalSubtitle.textContent = editing ? site.name : 'กำหนดพิกัดและรัศมีที่อนุญาตให้ลงเวลา';
+      siteSubmitBtn.textContent = editing ? 'บันทึกการแก้ไข' : 'บันทึกสถานที่';
+      if (editing) siteActiveToggle.checked = site.active;
+      updateSiteMapLink();
+      siteModal.show();
+    }
+
+    function updateSiteMapLink() {
+      const latitude = Number(siteLat.value);
+      const longitude = Number(siteLng.value);
+      const usable = Number.isFinite(latitude) && Number.isFinite(longitude) && siteLat.value !== '' && siteLng.value !== '';
+      siteMapLink.href = usable ? mapsLink(latitude, longitude) : '#';
+      siteMapLink.classList.toggle('disabled', !usable);
+    }
+
+    function openDeptForm(department) {
+      const editing = Boolean(department);
+      deptForm.reset();
+      deptFormError.textContent = '';
+      deptRecordId.value = editing ? department.id : '';
+      deptName.value = editing ? department.name : '';
+      deptNote.value = editing ? (department.note ?? '') : '';
+      deptActiveField.classList.toggle('d-none', !editing);
+      deptModalTitle.textContent = editing ? 'แก้ไขแผนก' : 'เพิ่มแผนก';
+      deptModalSubtitle.textContent = editing
+        ? `${department.name} · มีพนักงาน ${department.employee_count} คน`
+        : 'ตั้งชื่อแผนกหรือกลุ่มงาน';
+      deptSubmitBtn.textContent = editing ? 'บันทึกการแก้ไข' : 'บันทึกแผนก';
+      if (editing) deptActiveToggle.checked = department.active;
+      deptModal.show();
+    }
+
+    function openTypeForm(type) {
+      const editing = Boolean(type);
+      typeForm.reset();
+      typeFormError.textContent = '';
+      typeRecordId.value = editing ? type.id : '';
+      typeName.value = editing ? type.name : '';
+      typePayType.value = editing ? type.pay_type : 'daily';
+      typePayRate.value = editing ? type.pay_rate : 0;
+      typeNote.value = editing ? (type.note ?? '') : '';
+      typeOtMultiplier.value = editing ? type.ot_multiplier : 1.5;
+      typeLateDeduct.value = editing ? type.late_deduct_per_minute : 0;
+      typeDivisor.value = editing ? type.monthly_days_divisor : 30;
+      typeWorkHours.value = editing ? type.work_hours_per_day : 8;
+      typeActiveField.classList.toggle('d-none', !editing);
+      typeModalTitle.textContent = editing ? 'แก้ไขประเภทพนักงาน' : 'เพิ่มประเภทพนักงาน';
+      typeModalSubtitle.textContent = editing
+        ? `${type.name} · มีพนักงาน ${type.employee_count} คน`
+        : 'กำหนดวิธีจ่ายค่าตอบแทนของประเภทนี้';
+      typeSubmitBtn.textContent = editing ? 'บันทึกการแก้ไข' : 'บันทึกประเภท';
+      if (editing) typeActiveToggle.checked = type.active;
+      updateTypeRatePreview();
+      typeModal.show();
+    }
+
+    async function loadDashboard() {
+      try {
+        const [employees, logs, shifts, weekly, types, departments, sites] = await Promise.all([
+          fetch('/api/employees').then(r => r.json()),
+          fetch('/api/time-logs/today').then(r => r.json()),
+          fetch('/api/shifts').then(r => r.json()),
+          fetch('/api/schedules/weekly').then(r => r.json()),
+          fetch('/api/employee-types').then(r => r.json()),
+          fetch('/api/departments').then(r => r.json()),
+          fetch('/api/work-sites').then(r => r.json())
+        ]);
+        employeeList = employees;
+        shiftList = shifts;
+        typeList = types;
+        deptList = departments;
+        siteList = sites;
+        weeklyByEmployee = new Map();
+        for (const row of weekly) {
+          const key = String(row.employee_id);
+          if (!weeklyByEmployee.has(key)) weeklyByEmployee.set(key, {});
+          weeklyByEmployee.get(key)[row.weekday] = row.shift_id;
+        }
+        renderWeekly();
+        renderBulkControls();
+        syncEmployeeOptions();
+        const previousEntryEmployee = entryEmployee.value;
+        entryEmployee.innerHTML = employees.map(employee =>
+          `<option value="${esc(employee.id)}">${esc(employee.employee_code)} ${esc(employee.name)}</option>`).join('');
+        entryEmployee.value = previousEntryEmployee || (employees[0]?.id ?? '');
+        renderLeaveControls();
+        await loadWeekGrid();
+        const checkedIn = new Set(logs.filter(l => l.event_type === 'check_in').map(l => l.employee_code));
+        const checkedOut = new Set(logs.filter(l => l.event_type === 'check_out').map(l => l.employee_code));
+        const lateCodes = new Set(logs.filter(l => l.late_minutes > 0).map(l => l.employee_code));
+        const linked = employees.filter(e => e.line_user_id).length;
+
+        employeeCount.textContent = employees.length;
+        checkedInCount.textContent = checkedIn.size;
+        lateCount.textContent = lateCodes.size;
+        waitingCount.textContent = Math.max(0, employees.length - checkedIn.size);
+
+        recentTable.innerHTML = logs.length
+          ? logs.slice(0,5).map(l => `<tr><td class="ps-4 fw-semibold">${esc(l.employee_code)}</td><td>${esc(l.name)}</td><td>${eventBadge(l.event_type)}</td><td>${formatTime(l.occurred_at)}</td><td class="pe-4">${statusBadge(l)}</td></tr>`).join('')
+          : emptyRow(5,'ยังไม่มีรายการลงเวลาวันนี้');
+
+        const missingDetails = employees.filter(e => !e.national_id || !e.phone || !e.start_date).length;
+        const withoutShift = employees.filter(e => !e.shift_id).length;
+        employeesSummary.textContent = `ทั้งหมด ${employees.length} คน · ผูกบัญชี LINE แล้ว ${linked} คน · ยังไม่กำหนดกะ ${withoutShift} คน · กรอกรายละเอียดไม่ครบ ${missingDetails} คน`;
+        employeesTable.innerHTML = employees.length
+          ? employees.map(e => `<tr data-id="${esc(e.id)}">
+              <td class="ps-4 fw-semibold">${esc(e.employee_code)}</td>
+              <td>${esc(e.name)}</td>
+              <td>${esc(e.department_name) || dash}</td>
+              <td>${e.employee_type_name
+                ? `${esc(e.employee_type_name)}<div class="small text-secondary">${payMethod(e.pay_type)} ${formatMoney(e.pay_rate)} ${payUnit(e.pay_type)}</div>`
+                : dash}</td>
+              <td>${esc(e.phone) || dash}</td>
+              <td>${e.shift_name ? `${esc(e.shift_name)} <span class="text-secondary small">${esc(e.shift_start_time)}–${esc(e.shift_end_time)}</span>` : dash}</td>
+              <td>${esc(formatDay(e.start_date)) || dash}</td>
+              <td>${esc(e.ethnicity) || dash}</td>
+              <td>${lineBadge(e.line_user_id)}</td>
+              <td>${activeBadge(e.active)}</td>
+              <td class="pe-4 text-end"><button type="button" class="btn btn-sm btn-outline-secondary" data-edit="${esc(e.id)}"><i class="bi bi-pencil-square"></i></button></td>
+            </tr>`).join('')
+          : emptyRow(11,'ยังไม่มีพนักงานในระบบ กดปุ่ม เพิ่มพนักงาน เพื่อเริ่มต้น');
+
+        setSummary(sitesSummary, sites.length
+          ? `ทั้งหมด ${sites.length} แห่ง · เปิดใช้งาน ${sites.filter(site => site.active).length} แห่ง`
+          : 'ยังไม่มีสถานที่ทำงาน ระบบจะเก็บพิกัดไว้แต่ยังไม่ตรวจว่าอยู่ในพื้นที่หรือไม่');
+        sitesTable.innerHTML = sites.length
+          ? sites.map(site => `<tr data-site-id="${esc(site.id)}">
+              <td class="ps-4 fw-semibold">${esc(site.name)}</td>
+              <td class="small"><a href="${mapsLink(site.latitude, site.longitude)}" target="_blank" rel="noopener">${site.latitude.toFixed(6)}, ${site.longitude.toFixed(6)}</a></td>
+              <td class="text-end">${esc(site.radius_m)} ม.</td>
+              <td class="text-secondary">${esc(site.note) || '-'}</td>
+              <td>${activeBadge(site.active)}</td>
+              <td class="pe-4 text-end"><button type="button" class="btn btn-sm btn-outline-secondary" data-edit-site="${esc(site.id)}"><i class="bi bi-pencil-square"></i></button></td>
+            </tr>`).join('')
+          : emptyRow(6,'ยังไม่มีสถานที่ทำงาน กดปุ่ม เพิ่มสถานที่ทำงาน เพื่อเริ่มต้น');
+
+        const withoutDept = employees.filter(e => !e.department_id).length;
+        setSummary(deptsSummary, `ทั้งหมด ${departments.length} แผนก · เปิดใช้งาน ${departments.filter(d => d.active).length} แผนก · พนักงานที่ยังไม่กำหนดแผนก ${withoutDept} คน`);
+        deptsTable.innerHTML = departments.length
+          ? departments.map(d => `<tr data-dept-id="${esc(d.id)}">
+              <td class="ps-4 fw-semibold">${esc(d.name)}</td>
+              <td class="text-secondary">${esc(d.note) || '-'}</td>
+              <td>${esc(d.employee_count)} คน</td>
+              <td>${activeBadge(d.active)}</td>
+              <td class="pe-4 text-end"><button type="button" class="btn btn-sm btn-outline-secondary" data-edit-dept="${esc(d.id)}"><i class="bi bi-pencil-square"></i></button></td>
+            </tr>`).join('')
+          : emptyRow(5,'ยังไม่มีแผนก กดปุ่ม เพิ่มแผนก เพื่อเริ่มต้น');
+
+        const departmentOptions = ['<option value="">ทุกแผนก</option>'].concat(departments.map(d =>
+          `<option value="${esc(d.id)}">${esc(d.name)}</option>`)).join('');
+        for (const select of [reportDepartment, payrollDepartment, missingDepartment, bulkDepartment, leaveDepartment]) {
+          const previous = select.value;
+          select.innerHTML = departmentOptions;
+          select.value = previous;
+        }
+
+        const withoutType = employees.filter(e => !e.employee_type_id).length;
+        const activeTypes = types.filter(t => t.active).length;
+        setSummary(typesSummary, `ทั้งหมด ${types.length} ประเภท · เปิดใช้งาน ${activeTypes} ประเภท · พนักงานที่ยังไม่กำหนดประเภท ${withoutType} คน`);
+        typesTable.innerHTML = types.length
+          ? types.map(t => `<tr data-type-id="${esc(t.id)}">
+              <td class="ps-4 fw-semibold">${esc(t.name)}</td>
+              <td>${t.pay_type === 'monthly'
+                ? '<span class="badge text-bg-info-subtle text-info-emphasis">รายเดือน</span>'
+                : '<span class="badge text-bg-primary-subtle text-primary-emphasis">รายวัน</span>'}</td>
+              <td class="text-end fw-semibold">${formatMoney(t.pay_rate)} <span class="small text-secondary fw-normal">${payUnit(t.pay_type)}</span></td>
+              <td class="small text-secondary">OT ${esc(t.ot_multiplier)} เท่า · หักสาย ${formatMoney(t.late_deduct_per_minute)} บาท/นาที<div>${t.pay_type === 'monthly'
+                ? `หารด้วย ${esc(t.monthly_days_divisor)} วัน = วันละ ${formatMoney(t.pay_rate / t.monthly_days_divisor)} บาท`
+                : `วันละ ${formatMoney(t.pay_rate)} บาท`} · ${esc(t.work_hours_per_day)} ชม./วัน</div></td>
+              <td class="text-secondary">${esc(t.note) || '-'}</td>
+              <td>${esc(t.employee_count)} คน</td>
+              <td>${activeBadge(t.active)}</td>
+              <td class="pe-4 text-end"><button type="button" class="btn btn-sm btn-outline-secondary" data-edit-type="${esc(t.id)}"><i class="bi bi-pencil-square"></i></button></td>
+            </tr>`).join('')
+          : emptyRow(8,'ยังไม่มีประเภทพนักงาน กดปุ่ม เพิ่มประเภทพนักงาน เพื่อเริ่มต้น');
+
+        const activeShifts = shifts.filter(s => s.active).length;
+        shiftsSummary.textContent = `ทั้งหมด ${shifts.length} กะ · เปิดใช้งาน ${activeShifts} กะ`;
+        shiftsTable.innerHTML = shifts.length
+          ? shifts.map(s => `<tr data-shift-id="${esc(s.id)}">
+              <td class="ps-4 fw-semibold">${esc(s.name)}</td>
+              <td>${esc(s.start_time)} น.</td>
+              <td>${esc(s.end_time)} น.${Number(s.end_time.slice(0,2)) <= Number(s.start_time.slice(0,2)) ? ' <span class="badge text-bg-light border text-secondary">ข้ามคืน</span>' : ''}</td>
+              <td>${s.grace_minutes > 0 ? `${esc(s.grace_minutes)} นาที` : '<span class="text-secondary">ไม่อนุโลม</span>'}</td>
+              <td>${s.break_minutes > 0 ? `${esc(s.break_minutes)} นาที` : '<span class="text-secondary">ไม่มีพัก</span>'}</td>
+              <td>${esc(s.employee_count)} คน</td>
+              <td>${activeBadge(s.active)}</td>
+              <td class="pe-4 text-end"><button type="button" class="btn btn-sm btn-outline-secondary" data-edit-shift="${esc(s.id)}"><i class="bi bi-pencil-square"></i></button></td>
+            </tr>`).join('')
+          : emptyRow(8,'ยังไม่มีกะการทำงาน กดปุ่ม เพิ่มกะ เพื่อเริ่มต้น');
+
+        logsSummary.textContent = `${todayLabel} · ทั้งหมด ${logs.length} รายการ · มาสาย ${lateCodes.size} คน`;
+        logsTable.innerHTML = logs.length
+          ? logs.map(l => `<tr>
+              <td class="ps-4 fw-semibold">${esc(l.employee_code)}</td>
+              <td>${esc(l.name)}</td>
+              <td>${eventBadge(l.event_type)}</td>
+              <td>${formatTime(l.occurred_at)}</td>
+              <td>${l.shift_name ? `${esc(l.shift_name)} <span class="text-secondary small">${esc(l.shift_start_time)}</span>` : dash}</td>
+              <td>${statusBadge(l)}</td>
+              <td>${locationCell(l)}</td>
+              <td class="pe-4 text-secondary">${esc(l.note) || '-'}</td>
+            </tr>`).join('')
+          : emptyRow(8,'ยังไม่มีรายการลงเวลาวันนี้');
+      } catch {
+        employeesSummary.textContent = 'ไม่สามารถเชื่อมต่อ API ได้';
+        shiftsSummary.textContent = 'ไม่สามารถเชื่อมต่อ API ได้';
+        logsSummary.textContent = 'ไม่สามารถเชื่อมต่อ API ได้';
+        setSummary(typesSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        typesTable.innerHTML = errorRow(8);
+        setSummary(deptsSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        deptsTable.innerHTML = errorRow(5);
+        setSummary(sitesSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        sitesTable.innerHTML = errorRow(6);
+        setSummary(weeklySummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        recentTable.innerHTML = errorRow(5);
+        employeesTable.innerHTML = errorRow(11);
+        shiftsTable.innerHTML = errorRow(8);
+        weeklyTable.innerHTML = errorRow(9);
+        logsTable.innerHTML = errorRow(8);
+      }
+    }
+
+    // เขียนทีละพนักงาน แล้วรายงานรวมว่าสำเร็จกี่คน ล้มเหลวกี่คน
+    async function saveRows({ ids, button, summary, request, doneText }) {
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังบันทึก';
+      const failures = [];
+      for (const id of ids) {
+        try {
+          const { url, method, body } = request(id);
+          const response = await fetch(url, { method, headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+          if (!response.ok) {
+            const result = await response.json().catch(() => ({}));
+            failures.push(result.error ?? 'บันทึกไม่สำเร็จ');
+          }
+        } catch {
+          failures.push('ไม่สามารถเชื่อมต่อ API ได้');
+        }
+      }
+      await loadDashboard();
+      await loadDaySchedule();
+      if (failures.length) setSummary(summary, `บันทึกไม่สำเร็จ ${failures.length} รายการ: ${failures[0]}`, true);
+      else setSummary(summary, `${doneText} ${ids.length} รายการเรียบร้อย`);
+    }
+
+    weeklyTable.addEventListener('change', event => {
+      const row = event.target.closest('tr[data-employee-id]');
+      if (!row) return;
+      weeklyDirty.add(row.dataset.employeeId);
+      saveWeeklyBtn.disabled = false;
+      saveWeeklyBtn.innerHTML = `<i class="bi bi-save me-1"></i>บันทึกตารางสัปดาห์ (${weeklyDirty.size} คน)`;
+    });
+
+    weeklyTable.addEventListener('click', async event => {
+      const button = event.target.closest('button[data-clear-weekly]');
+      if (!button) return;
+      if (!confirm('ล้างตารางประจำสัปดาห์ของพนักงานคนนี้ แล้วกลับไปใช้กะประจำทุกวัน?')) return;
+      await fetch(`/api/schedules/weekly/${button.dataset.clearWeekly}`, { method:'DELETE' });
+      await loadDashboard();
+      await loadDaySchedule();
+    });
+
+    saveWeeklyBtn.addEventListener('click', () => saveRows({
+      ids: [...weeklyDirty],
+      button: saveWeeklyBtn,
+      summary: weeklySummary,
+      doneText: 'บันทึกตารางสัปดาห์',
+      request: id => {
+        const row = weeklyTable.querySelector(`tr[data-employee-id="${id}"]`);
+        const days = {};
+        row.querySelectorAll('select[data-weekday]').forEach(select => { days[select.dataset.weekday] = select.value || null; });
+        return { url:`/api/schedules/weekly/${id}`, method:'PUT', body:{ days } };
+      }
+    }));
+
+    dayTable.addEventListener('change', event => {
+      const row = event.target.closest('tr[data-employee-id]');
+      if (!row) return;
+      dayDirty.add(row.dataset.employeeId);
+      saveDayBtn.disabled = false;
+      saveDayBtn.innerHTML = `<i class="bi bi-save me-1"></i>บันทึกตารางวันนี้ (${dayDirty.size} คน)`;
+    });
+
+    dayTable.addEventListener('click', async event => {
+      const button = event.target.closest('button[data-clear-override]');
+      if (!button) return;
+      await fetch(`/api/schedules/overrides/${button.dataset.clearOverride}/${dayDate.value || bangkokToday()}`, { method:'DELETE' });
+      await loadDashboard();
+      await loadDaySchedule();
+    });
+
+    saveDayBtn.addEventListener('click', () => saveRows({
+      ids: [...dayDirty],
+      button: saveDayBtn,
+      summary: daySummary,
+      doneText: 'บันทึกตารางรายวัน',
+      request: id => {
+        const row = dayTable.querySelector(`tr[data-employee-id="${id}"]`);
+        return { url:'/api/schedules/overrides', method:'PUT', body:{
+          employeeId: id,
+          workDate: dayDate.value || bangkokToday(),
+          shiftId: row.querySelector('select[data-day-shift]').value || null,
+          note: row.querySelector('input[data-day-note]').value
+        } };
+      }
+    }));
+
+    dayDate.addEventListener('change', loadDaySchedule);
+
+    // ตัวช่วยตั้งกะเป็นช่วง เขียนลงตารางรายวันทีเดียวหลายวันหลายคน
+    const WEEKDAY_NAMES = { 0:'อาทิตย์', 1:'จันทร์', 2:'อังคาร', 3:'พุธ', 4:'พฤหัส', 5:'ศุกร์', 6:'เสาร์' };
+    const toIsoDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+    const bulkSelected = new Set();
+
+    // สัปดาห์เริ่มวันจันทร์ offset 0 คือสัปดาห์นี้ 1 คือสัปดาห์หน้า
+    function weekRange(offsetWeeks) {
+      const base = new Date(`${bangkokToday()}T00:00:00`);
+      const monday = new Date(base);
+      monday.setDate(base.getDate() - ((base.getDay() + 6) % 7) + offsetWeeks * 7);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      return [toIsoDate(monday), toIsoDate(sunday)];
+    }
+
+    function setBulkRange(offsetWeeks) {
+      const [from, to] = weekRange(offsetWeeks);
+      bulkFrom.value = from;
+      bulkTo.value = to;
+      updateBulkPreview();
+    }
+
+    const selectedWeekdays = () => [...bulkWeekdays.querySelectorAll('input:checked')].map(input => Number(input.value));
+    const selectedEmployeeIds = () => [...bulkEmployees.querySelectorAll('input:checked')].map(input => input.value);
+
+    function bulkDates() {
+      const from = bulkFrom.value;
+      const to = bulkTo.value;
+      if (!from || !to || from > to) return [];
+      const weekdays = new Set(selectedWeekdays());
+      const dates = [];
+      for (let day = new Date(`${from}T00:00:00`); toIsoDate(day) <= to; day.setDate(day.getDate() + 1)) {
+        if (weekdays.has(day.getDay())) dates.push(toIsoDate(day));
+      }
+      return dates;
+    }
+
+    function updateBulkPreview() {
+      const dates = bulkDates();
+      const people = selectedEmployeeIds().length;
+      const shiftName = bulkShift.value
+        ? (shiftList.find(shift => String(shift.id) === bulkShift.value)?.name ?? 'กะที่เลือก')
+        : 'วันหยุด';
+      bulkSelectedCount.textContent = people ? `เลือกแล้ว ${people} คน` : 'ยังไม่ได้เลือกพนักงาน';
+      bulkPreview.className = 'small text-secondary';
+      bulkPreview.textContent = dates.length && people
+        ? `จะตั้ง ${shiftName} · ${dates.length} วัน × ${people} คน = ${dates.length * people} รายการ (${dates[0]} ถึง ${dates[dates.length - 1]})`
+        : 'เลือกช่วงวันที่ วันในสัปดาห์ และพนักงานให้ครบก่อน';
+      const invalid = !dates.length || !people;
+      bulkSetBtn.disabled = invalid;
+      bulkClearBtn.disabled = invalid;
+    }
+
+    function renderBulkControls() {
+      if (!bulkWeekdays.children.length) {
+        bulkWeekdays.innerHTML = WEEKDAY_ORDER.map(weekday => `<div class="form-check form-check-inline me-0">
+          <input class="form-check-input" type="checkbox" id="bulkDay${weekday}" value="${weekday}" checked>
+          <label class="form-check-label small" for="bulkDay${weekday}">${WEEKDAY_NAMES[weekday]}</label>
+        </div>`).join('');
+      }
+      const previousShift = bulkShift.value;
+      bulkShift.innerHTML = shiftOptions(previousShift || (shiftList[0]?.id ?? ''));
+      // ค่าเริ่มต้นไม่เลือกใครไว้ ผู้ใช้ต้องติ๊กเอง เพื่อไม่ให้เผลอตั้งกะให้ทุกคน
+      const visible = employeesInDepartment(bulkDepartment.value);
+      bulkEmployees.innerHTML = visible.length ? visible.map(employee => `<div class="form-check me-0">
+        <input class="form-check-input" type="checkbox" id="bulkEmp${esc(employee.id)}" value="${esc(employee.id)}"${bulkSelected.has(String(employee.id)) ? ' checked' : ''}>
+        <label class="form-check-label small" for="bulkEmp${esc(employee.id)}">${esc(employee.employee_code)} ${esc(employee.name)}</label>
+      </div>`).join('') : `<span class="text-secondary small">${employeeList.length ? 'ไม่มีพนักงานในกลุ่มนี้' : 'ยังไม่มีพนักงานในระบบ'}</span>`;
+      bulkSelectAll.checked = visible.length > 0 && visible.every(employee => bulkSelected.has(String(employee.id)));
+      updateBulkPreview();
+    }
+
+    async function submitBulk(action) {
+      const dates = bulkDates();
+      const employeeIds = selectedEmployeeIds();
+      if (action === 'clear' && !confirm(`ล้างการแก้รายวัน ${dates.length} วัน ของพนักงาน ${employeeIds.length} คน แล้วกลับไปใช้ตารางประจำสัปดาห์?`)) return;
+      const button = action === 'clear' ? bulkClearBtn : bulkSetBtn;
+      const label = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังบันทึก';
+      try {
+        const response = await fetch('/api/schedules/overrides/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify({
+            action,
+            employeeIds,
+            from: bulkFrom.value,
+            to: bulkTo.value,
+            weekdays: selectedWeekdays(),
+            shiftId: bulkShift.value || null,
+            note: bulkNote.value
+          })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setSummary(bulkSummary, result.error ?? 'บันทึกไม่สำเร็จ', true);
+          return;
+        }
+        setSummary(bulkSummary, action === 'clear'
+          ? `ล้างการแก้รายวันแล้ว ${result.cleared} รายการ`
+          : `ตั้งกะล่วงหน้าแล้ว ${result.saved} รายการ ตรวจได้ที่ตารางรายวันด้านล่าง`);
+        await loadDashboard();
+        await loadDaySchedule();
+      } catch {
+        setSummary(bulkSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+      } finally {
+        button.innerHTML = label;
+        updateBulkPreview();
+      }
+    }
+
+    bulkEmployees.addEventListener('change', event => {
+      if (event.target.checked) bulkSelected.add(event.target.value);
+      else bulkSelected.delete(event.target.value);
+      const visible = employeesInDepartment(bulkDepartment.value);
+      bulkSelectAll.checked = visible.length > 0 && visible.every(employee => bulkSelected.has(String(employee.id)));
+      updateBulkPreview();
+    });
+    // เปลี่ยนกลุ่มแล้วล้างคนที่ไม่อยู่ในรายชื่อที่เห็น เพื่อให้สิ่งที่เห็นตรงกับสิ่งที่จะบันทึก
+    bulkDepartment.addEventListener('change', () => {
+      const visibleIds = new Set(employeesInDepartment(bulkDepartment.value).map(employee => String(employee.id)));
+      for (const id of [...bulkSelected]) if (!visibleIds.has(id)) bulkSelected.delete(id);
+      renderBulkControls();
+    });
+    bulkWeekdays.addEventListener('change', updateBulkPreview);
+    bulkShift.addEventListener('change', updateBulkPreview);
+    bulkFrom.addEventListener('change', updateBulkPreview);
+    bulkTo.addEventListener('change', updateBulkPreview);
+    bulkSelectAll.addEventListener('change', () => {
+      bulkEmployees.querySelectorAll('input[type="checkbox"]').forEach(input => {
+        input.checked = bulkSelectAll.checked;
+        if (input.checked) bulkSelected.add(input.value);
+        else bulkSelected.delete(input.value);
+      });
+      updateBulkPreview();
+    });
+    bulkThisWeek.addEventListener('click', () => setBulkRange(0));
+    bulkNextWeek.addEventListener('click', () => setBulkRange(1));
+    bulkWeekAfter.addEventListener('click', () => setBulkRange(2));
+    bulkAllDays.addEventListener('click', () => {
+      bulkWeekdays.querySelectorAll('input').forEach(input => { input.checked = true; });
+      updateBulkPreview();
+    });
+    bulkWorkDays.addEventListener('click', () => {
+      bulkWeekdays.querySelectorAll('input').forEach(input => { input.checked = Number(input.value) >= 1 && Number(input.value) <= 5; });
+      updateBulkPreview();
+    });
+    bulkSetBtn.addEventListener('click', () => submitBulk('set'));
+    bulkClearBtn.addEventListener('click', () => submitBulk('clear'));
+
+    // มุมมองรายสัปดาห์ ตอบคำถามว่าใครอยู่กะไหนในแต่ละวัน
+    const SHIFT_COLORS = ['bg-primary-subtle text-primary-emphasis','bg-success-subtle text-success-emphasis',
+      'bg-info-subtle text-info-emphasis','bg-warning-subtle text-warning-emphasis',
+      'bg-danger-subtle text-danger-emphasis','bg-secondary-subtle text-secondary-emphasis'];
+    const shiftColor = shiftId => {
+      const index = shiftList.findIndex(shift => String(shift.id) === String(shiftId));
+      return SHIFT_COLORS[(index < 0 ? 0 : index) % SHIFT_COLORS.length];
+    };
+    const formatShortDay = iso => new Intl.DateTimeFormat('th-TH',{ day:'numeric', month:'short' }).format(new Date(`${iso}T00:00:00`));
+    const addDays = (iso, amount) => {
+      const date = new Date(`${iso}T00:00:00`);
+      date.setDate(date.getDate() + amount);
+      return toIsoDate(date);
+    };
+    const mondayOf = iso => {
+      const date = new Date(`${iso}T00:00:00`);
+      date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+      return toIsoDate(date);
+    };
+    let weekStart = mondayOf(bangkokToday());
+
+    const overrideMark = cell => ` <i class="bi bi-pencil-fill text-info" title="แก้รายวัน${cell.override_note ? ' · ' + esc(cell.override_note) : ''}"></i>`;
+    const weekCell = cell => {
+      if (!cell) return dash;
+      const mark = cell.has_override ? overrideMark(cell) : '';
+      if (cell.leave_type) return `<span class="badge text-bg-warning-subtle text-warning-emphasis" title="${esc(cell.leave_note)}">${esc(cell.leave_type)}</span>${mark}`;
+      if (!cell.shift_id) return `<span class="badge bg-light border text-secondary">หยุด</span>${mark}`;
+      return `<span class="badge ${shiftColor(cell.shift_id)}">${esc(cell.shift_name)}</span> <span class="small text-secondary">${esc(cell.start_time)}</span>${mark}`;
+    };
+
+    async function loadWeekGrid() {
+      const from = weekStart;
+      const to = addDays(from, 6);
+      const dates = [...Array(7)].map((_, index) => addDays(from, index));
+      const today = bangkokToday();
+      const dayClass = date => (date === today ? ' table-warning' : '');
+      try {
+        const data = await fetch(`/api/schedules/range?from=${from}&to=${to}`).then(r => r.json());
+        const cells = data.cells ?? [];
+        weekHead.innerHTML = '<th class="ps-4">พนักงาน</th>' + dates.map(date =>
+          `<th class="${dayClass(date).trim()}">${WEEKDAY_NAMES[new Date(`${date}T00:00:00`).getDay()]}
+            <div class="small fw-normal text-secondary">${formatShortDay(date)}${date === today ? ' · วันนี้' : ''}</div></th>`).join('');
+
+        const byEmployee = new Map();
+        for (const cell of cells) {
+          if (!byEmployee.has(cell.employee_id)) {
+            byEmployee.set(cell.employee_id, { code: cell.employee_code, name: cell.name, days: {} });
+          }
+          byEmployee.get(cell.employee_id).days[cell.work_date] = cell;
+        }
+
+        weekBody.innerHTML = byEmployee.size ? [...byEmployee.values()].map(employee => `<tr>
+          <td class="ps-4"><div class="fw-semibold">${esc(employee.code)}</div><div class="small text-secondary">${esc(employee.name)}</div></td>
+          ${dates.map(date => `<td class="${dayClass(date).trim()}">${weekCell(employee.days[date])}</td>`).join('')}
+        </tr>`).join('') : emptyRow(8,'ยังไม่มีพนักงานในระบบ');
+
+        weekFoot.innerHTML = `<tr class="table-light"><td class="ps-4 small text-secondary">รวมแต่ละวัน</td>${dates.map(date => {
+          const dayCells = cells.filter(cell => cell.work_date === date);
+          const working = dayCells.filter(cell => cell.shift_id).length;
+          return `<td class="small${dayClass(date)}"><span class="text-success-emphasis fw-semibold">เข้างาน ${working}</span><br><span class="text-secondary">หยุด ${dayCells.length - working}</span></td>`;
+        }).join('')}</tr>`;
+
+        const overrides = cells.filter(cell => cell.has_override).length;
+        const unset = cells.filter(cell => cell.schedule_source === 'none').length;
+        setSummary(weekSummary, `${formatDay(from)} ถึง ${formatDay(to)} · พนักงาน ${byEmployee.size} คน`
+          + ` · แก้รายวัน ${overrides} รายการ` + (unset ? ` · ยังไม่ตั้งตาราง ${unset} ช่อง` : ''));
+        weekLegend.innerHTML = shiftList.map(shift =>
+          `<span><span class="badge ${shiftColor(shift.id)}">${esc(shift.name)}</span> <span class="text-secondary">${esc(shift.start_time)}–${esc(shift.end_time)}</span></span>`).join('')
+          + '<span><span class="badge bg-light border text-secondary">หยุด</span> <span class="text-secondary">ไม่มีตารางงาน</span></span>'
+          + '<span class="text-secondary"><i class="bi bi-pencil-fill text-info me-1"></i>แก้รายวันทับตารางสัปดาห์ ชี้ที่ไอคอนเพื่อดูหมายเหตุ</span>';
+      } catch {
+        setSummary(weekSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        weekHead.innerHTML = '<th class="ps-4">พนักงาน</th>';
+        weekBody.innerHTML = errorRow(8);
+        weekFoot.innerHTML = '';
+      }
+    }
+
+    // ===== การลา =====
+    const leaveSelected = new Set();
+    let leaveTypes = [];
+
+    function renderLeaveControls() {
+      if (leaveTypes.length && !leaveType.options.length) {
+        leaveType.innerHTML = leaveTypes.map(type => `<option value="${esc(type)}">${esc(type)}</option>`).join('');
+      }
+      const visible = employeesInDepartment(leaveDepartment.value);
+      leaveEmployees.innerHTML = visible.length ? visible.map(employee => `<div class="form-check me-0">
+        <input class="form-check-input" type="checkbox" id="leaveEmp${esc(employee.id)}" value="${esc(employee.id)}"${leaveSelected.has(String(employee.id)) ? ' checked' : ''}>
+        <label class="form-check-label small" for="leaveEmp${esc(employee.id)}">${esc(employee.employee_code)} ${esc(employee.name)}</label>
+      </div>`).join('') : `<span class="text-secondary small">${employeeList.length ? 'ไม่มีพนักงานในกลุ่มนี้' : 'ยังไม่มีพนักงานในระบบ'}</span>`;
+      leaveSelectAll.checked = visible.length > 0 && visible.every(employee => leaveSelected.has(String(employee.id)));
+      updateLeavePreview();
+    }
+
+    function updateLeavePreview() {
+      const days = leaveFrom.value && leaveTo.value && leaveFrom.value <= leaveTo.value
+        ? Math.round((Date.parse(leaveTo.value) - Date.parse(leaveFrom.value)) / 86400000) + 1 : 0;
+      const people = leaveSelected.size;
+      leaveSelectedCount.textContent = people ? `เลือกแล้ว ${people} คน` : 'ยังไม่ได้เลือกพนักงาน';
+      leavePreview.textContent = days && people
+        ? `จะบันทึก ${leaveType.value || 'การลา'} ${days} วัน × ${people} คน = ${days * people} รายการ`
+        : 'เลือกช่วงวันที่และพนักงานให้ครบก่อน';
+      leaveSaveBtn.disabled = !days || !people;
+    }
+
+    async function loadLeaveList() {
+      try {
+        const rows = await fetch(`/api/leaves?from=${leaveListFrom.value}&to=${leaveListTo.value}`).then(r => r.json());
+        setSummary(leaveListSummary, `${formatDay(leaveListFrom.value)} ถึง ${formatDay(leaveListTo.value)} · ทั้งหมด ${rows.length} รายการ`);
+        leaveTable.innerHTML = rows.length ? rows.map(row => `<tr>
+          <td class="ps-4">${esc(formatDay(row.work_date))}</td>
+          <td class="fw-semibold">${esc(row.employee_code)}</td>
+          <td>${esc(row.name)}</td>
+          <td><span class="badge text-bg-warning-subtle text-warning-emphasis">${esc(row.leave_type)}</span></td>
+          <td class="text-secondary">${esc(row.note) || '-'}</td>
+          <td class="pe-4 text-end"><button type="button" class="btn btn-sm btn-outline-secondary" data-delete-leave="${esc(row.employee_id)}" data-date="${esc(row.work_date)}" title="ลบรายการลา"><i class="bi bi-trash3"></i></button></td>
+        </tr>`).join('') : emptyRow(6,'ยังไม่มีรายการลาในช่วงนี้');
+      } catch {
+        setSummary(leaveListSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        leaveTable.innerHTML = errorRow(6);
+      }
+    }
+
+    leaveEmployees.addEventListener('change', event => {
+      if (event.target.checked) leaveSelected.add(event.target.value);
+      else leaveSelected.delete(event.target.value);
+      const visible = employeesInDepartment(leaveDepartment.value);
+      leaveSelectAll.checked = visible.length > 0 && visible.every(employee => leaveSelected.has(String(employee.id)));
+      updateLeavePreview();
+    });
+    leaveDepartment.addEventListener('change', () => {
+      const visibleIds = new Set(employeesInDepartment(leaveDepartment.value).map(employee => String(employee.id)));
+      for (const id of [...leaveSelected]) if (!visibleIds.has(id)) leaveSelected.delete(id);
+      renderLeaveControls();
+    });
+    leaveSelectAll.addEventListener('change', () => {
+      leaveEmployees.querySelectorAll('input[type="checkbox"]').forEach(input => {
+        input.checked = leaveSelectAll.checked;
+        if (input.checked) leaveSelected.add(input.value);
+        else leaveSelected.delete(input.value);
+      });
+      updateLeavePreview();
+    });
+    [leaveFrom, leaveTo, leaveType].forEach(element => element.addEventListener('change', updateLeavePreview));
+    [leaveListFrom, leaveListTo].forEach(element => element.addEventListener('change', loadLeaveList));
+
+    leaveSaveBtn.addEventListener('click', async () => {
+      const label = leaveSaveBtn.innerHTML;
+      leaveSaveBtn.disabled = true;
+      leaveSaveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังบันทึก';
+      try {
+        const response = await fetch('/api/leaves', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify({ employeeIds:[...leaveSelected], from:leaveFrom.value, to:leaveTo.value,
+                                 leaveType:leaveType.value, note:leaveNote.value })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) { setSummary(leaveFormSummary, result.error ?? 'บันทึกไม่สำเร็จ', true); return; }
+        setSummary(leaveFormSummary, `บันทึกการลาแล้ว ${result.saved} รายการ`);
+        leaveNote.value = '';
+        await loadLeaveList();
+        await loadWeekGrid();
+        await loadReport();
+      } catch {
+        setSummary(leaveFormSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+      } finally {
+        leaveSaveBtn.innerHTML = label;
+        updateLeavePreview();
+      }
+    });
+
+    leaveTable.addEventListener('click', async event => {
+      const button = event.target.closest('button[data-delete-leave]');
+      if (!button) return;
+      if (!confirm('ลบรายการลานี้?')) return;
+      await fetch(`/api/leaves/${button.dataset.deleteLeave}/${button.dataset.date}`, { method:'DELETE' });
+      await loadLeaveList();
+      await loadWeekGrid();
+      await loadReport();
+    });
+
+    // ===== อนุมัติ OT =====
+    // ใช้ช่วงวันที่และตัวกรองร่วมกับตารางคำนวณค่าจ้าง เพื่อให้อนุมัติแล้วเห็นผลในตารางเดียวกันทันที
+    const otQuery = () => `from=${payrollFrom.value}&to=${payrollTo.value}`
+      + (payrollEmployee.value ? `&employeeId=${payrollEmployee.value}` : '')
+      + (payrollDepartment.value ? `&departmentId=${payrollDepartment.value}` : '');
+
+    async function loadOt() {
+      if (!payrollFrom.value || !payrollTo.value) return;
+      try {
+        const rows = await fetch(`/api/ot?${otQuery()}`).then(r => r.json());
+        if (rows.error) { setSummary(otSummary, rows.error, true); otTable.innerHTML = errorRow(9); return; }
+        // อนุมัติ 0 นาที = ตัดสินใจแล้วว่าไม่อนุมัติ ต่างจากยังไม่ได้ดูซึ่งไม่มีแถวอนุมัติเลย
+        const pending = rows.filter(row => !row.approved);
+        const rejected = rows.filter(row => row.approved && row.paid_minutes === 0);
+        const granted = rows.filter(row => row.approved && row.paid_minutes > 0);
+        const approvedMinutes = granted.reduce((sum, row) => sum + row.paid_minutes, 0);
+        const pendingMinutes = pending.reduce((sum, row) => sum + row.ot_minutes, 0);
+        setSummary(otSummary, rows.length
+          ? `${formatDay(payrollFrom.value)} ถึง ${formatDay(payrollTo.value)}`
+            + ` · รออนุมัติ ${pending.length} รายการ (${pendingMinutes} นาที)`
+            + ` · อนุมัติแล้ว ${granted.length} รายการ (${approvedMinutes} นาที)`
+            + ` · ไม่อนุมัติ ${rejected.length} รายการ`
+          : `${formatDay(payrollFrom.value)} ถึง ${formatDay(payrollTo.value)} · ไม่มีรายการ OT ในช่วงนี้`);
+        otApproveAllBtn.disabled = pending.length === 0;
+        otApproveAllBtn.innerHTML = pending.length
+          ? `<i class="bi bi-check2-all me-1"></i>อนุมัติทั้งหมดที่รออยู่ (${pending.length})`
+          : '<i class="bi bi-check2-all me-1"></i>อนุมัติทั้งหมดที่รออยู่';
+        otTable.innerHTML = rows.length ? rows.map(row => `<tr data-employee-id="${esc(row.employee_id)}" data-work-date="${esc(row.work_date)}">
+          <td class="ps-4 text-nowrap">${esc(formatDay(row.work_date))}</td>
+          <td class="text-nowrap"><span class="fw-semibold">${esc(row.employee_code)}</span> <span class="text-secondary">${esc(row.name)}</span>
+            ${row.department_name ? `<div class="small text-secondary">${esc(row.department_name)}</div>` : ''}</td>
+          <td class="text-nowrap text-secondary small">${row.shift_name ? `${esc(row.shift_name)} เลิก ${esc(row.shift_end)}` : dash}</td>
+          <td class="text-nowrap">${row.last_out ? `<span class="badge text-bg-success-subtle text-success-emphasis">${esc(row.last_out)}</span>` : dash}</td>
+          <td class="text-end fw-semibold">${row.ot_minutes}</td>
+          <td><input class="form-control form-control-sm" type="number" min="0" max="1440" step="1" data-ot-minutes
+                     value="${row.approved ? (row.approved_minutes ?? row.ot_minutes) : row.ot_minutes}" style="width:6.5rem"></td>
+          <td><input class="form-control form-control-sm" data-ot-note maxlength="160" value="${esc(row.approval_note)}" placeholder="เหตุผล" style="min-width:9rem"></td>
+          <td>${!row.approved
+            ? '<span class="badge text-bg-warning">รออนุมัติ</span>'
+            : row.paid_minutes > 0
+              ? `<span class="badge text-bg-success">อนุมัติแล้ว ${row.paid_minutes} นาที</span>`
+              : '<span class="badge text-bg-danger">ไม่อนุมัติ</span>'}</td>
+          <td class="pe-4 text-end text-nowrap">
+            <button type="button" class="btn btn-sm ${row.approved && row.paid_minutes > 0 ? 'btn-outline-success' : 'btn-success'}" data-ot-approve title="${row.approved ? 'บันทึกนาทีที่อนุมัติ' : 'อนุมัติ'}"><i class="bi bi-check2"></i></button>
+            <button type="button" class="btn btn-sm ${row.approved && row.paid_minutes === 0 ? 'btn-danger' : 'btn-outline-danger'} ms-1" data-ot-reject title="ไม่อนุมัติ บันทึกว่าตรวจแล้วและไม่จ่าย OT วันนี้"><i class="bi bi-x-lg"></i></button>
+            ${row.approved ? '<button type="button" class="btn btn-sm btn-outline-secondary ms-1" data-ot-revoke title="ล้างการตัดสินใจ กลับเป็นรออนุมัติ"><i class="bi bi-arrow-counterclockwise"></i></button>' : ''}
+          </td>
+        </tr>`).join('') : emptyRow(9,'ไม่มีรายการ OT ในช่วงนี้ (ไม่มีใครสแกนออกหลังเวลาเลิกกะ)');
+      } catch {
+        setSummary(otSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        otTable.innerHTML = errorRow(9);
+      }
+    }
+
+    async function refreshOtAndPay() {
+      await loadOt();
+      await loadPayroll();
+    }
+
+    otTable.addEventListener('click', async event => {
+      const button = event.target.closest('button[data-ot-approve], button[data-ot-reject], button[data-ot-revoke]');
+      if (!button) return;
+      const row = button.closest('tr[data-employee-id]');
+      const employeeId = row.dataset.employeeId;
+      const workDate = row.dataset.workDate;
+      const action = button.hasAttribute('data-ot-revoke') ? 'revoke'
+        : button.hasAttribute('data-ot-reject') ? 'reject' : 'approve';
+      if (action === 'revoke' && !confirm('ล้างการตัดสินใจของวันนี้ กลับเป็นรออนุมัติ?')) return;
+      button.disabled = true;
+      try {
+        if (action === 'revoke') {
+          await fetch(`/api/ot/approve/${employeeId}/${workDate}`, { method:'DELETE' });
+        } else {
+          // ไม่อนุมัติ = บันทึกว่าอนุมัติ 0 นาที จึงมีหลักฐานว่าตรวจแล้วและไม่จ่าย
+          const response = await fetch('/api/ot/approve', {
+            method:'PUT', headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ employeeId, workDate,
+              approvedMinutes: action === 'reject' ? 0 : row.querySelector('input[data-ot-minutes]').value,
+              note: row.querySelector('input[data-ot-note]').value })
+          });
+          if (!response.ok) {
+            const result = await response.json().catch(() => ({}));
+            setSummary(otSummary, result.error ?? 'บันทึกไม่สำเร็จ', true);
+            button.disabled = false;
+            return;
+          }
+        }
+        await refreshOtAndPay();
+      } catch {
+        setSummary(otSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        button.disabled = false;
+      }
+    });
+
+    otApproveAllBtn.addEventListener('click', async () => {
+      const label = otApproveAllBtn.innerHTML;
+      otApproveAllBtn.disabled = true;
+      otApproveAllBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังอนุมัติ';
+      try {
+        const response = await fetch('/api/ot/approve/bulk', {
+          method:'POST', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ from: payrollFrom.value, to: payrollTo.value,
+            employeeId: payrollEmployee.value, departmentId: payrollDepartment.value, note: otBulkNote.value })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) { setSummary(otSummary, result.error ?? 'อนุมัติไม่สำเร็จ', true); return; }
+        await refreshOtAndPay();
+        setSummary(otSummary, `อนุมัติเพิ่ม ${result.approved} รายการเรียบร้อย`);
+      } catch {
+        setSummary(otSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+      } finally {
+        otApproveAllBtn.innerHTML = label;
+      }
+    });
+
+    // ===== รายการค่าใช้จ่ายที่พนักงานส่งมา =====
+    const CLAIM_STATUS = {
+      pending: '<span class="badge text-bg-warning">รอตรวจ</span>',
+      approved: '<span class="badge text-bg-success">อนุมัติแล้ว</span>',
+      rejected: '<span class="badge text-bg-danger">ไม่อนุมัติ</span>'
+    };
+
+    async function loadClaims() {
+      if (!payrollFrom.value || !payrollTo.value) return;
+      try {
+        const query = `from=${payrollFrom.value}&to=${payrollTo.value}`
+          + (claimStatusFilter.value ? `&status=${claimStatusFilter.value}` : '')
+          + (payrollEmployee.value ? `&employeeId=${payrollEmployee.value}` : '')
+          + (payrollDepartment.value ? `&departmentId=${payrollDepartment.value}` : '');
+        const rows = await fetch(`/api/expenses?${query}`).then(r => r.json());
+        if (rows.error) { setSummary(claimSummary, rows.error, true); claimTable.innerHTML = errorRow(9); return; }
+        const pending = rows.filter(row => row.status === 'pending');
+        const approved = rows.filter(row => row.status === 'approved');
+        setSummary(claimSummary, `${formatDay(payrollFrom.value)} ถึง ${formatDay(payrollTo.value)}`
+          + ` · รอตรวจ ${pending.length} รายการ (${baht(pending.reduce((sum, row) => sum + row.amount, 0))} บาท)`
+          + ` · อนุมัติแล้ว ${approved.length} รายการ (${baht(approved.reduce((sum, row) => sum + (row.approved_amount ?? 0), 0))} บาท)`);
+        claimTable.innerHTML = rows.length ? rows.map(row => `<tr data-claim-id="${esc(row.id)}">
+          <td class="ps-4 text-nowrap">${esc(formatDay(row.claim_date))}</td>
+          <td class="text-nowrap"><span class="fw-semibold">${esc(row.employee_code)}</span> <span class="text-secondary">${esc(row.name)}</span>
+            ${row.department_name ? `<div class="small text-secondary">${esc(row.department_name)}</div>` : ''}</td>
+          <td class="text-nowrap">${esc(row.category)}</td>
+          <td class="small text-secondary">${esc(row.detail) || '-'}<div class="small">ส่งเมื่อ ${esc(row.created_at)}</div></td>
+          <td class="text-end fw-semibold">${baht(row.amount)}</td>
+          <td><input class="form-control form-control-sm" type="number" min="0" step="0.01" data-claim-amount
+                     value="${row.approved_amount !== null && row.approved_amount !== undefined ? row.approved_amount : row.amount}" style="width:7.5rem"></td>
+          <td><input class="form-control form-control-sm" data-claim-note maxlength="160" value="${esc(row.review_note)}" placeholder="เหตุผล" style="min-width:9rem"></td>
+          <td>${CLAIM_STATUS[row.status] ?? dash}</td>
+          <td class="pe-4 text-end text-nowrap">
+            <button type="button" class="btn btn-sm ${row.status === 'approved' ? 'btn-outline-success' : 'btn-success'}" data-claim-approve title="อนุมัติตามยอดในช่อง"><i class="bi bi-check2"></i></button>
+            <button type="button" class="btn btn-sm ${row.status === 'rejected' ? 'btn-danger' : 'btn-outline-danger'} ms-1" data-claim-reject title="ไม่อนุมัติ"><i class="bi bi-x-lg"></i></button>
+            ${row.status !== 'pending' ? '<button type="button" class="btn btn-sm btn-outline-secondary ms-1" data-claim-reset title="กลับเป็นรอตรวจ"><i class="bi bi-arrow-counterclockwise"></i></button>' : ''}
+          </td>
+        </tr>`).join('') : emptyRow(9,'ยังไม่มีรายการค่าใช้จ่ายในช่วงนี้');
+      } catch {
+        setSummary(claimSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        claimTable.innerHTML = errorRow(9);
+      }
+    }
+
+    claimTable.addEventListener('click', async event => {
+      const button = event.target.closest('button[data-claim-approve], button[data-claim-reject], button[data-claim-reset]');
+      if (!button) return;
+      const row = button.closest('tr[data-claim-id]');
+      const status = button.hasAttribute('data-claim-approve') ? 'approved'
+        : button.hasAttribute('data-claim-reject') ? 'rejected' : 'pending';
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/expenses/${row.dataset.claimId}`, {
+          method:'PATCH', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ status,
+            approvedAmount: status === 'approved' ? row.querySelector('input[data-claim-amount]').value : null,
+            reviewNote: row.querySelector('input[data-claim-note]').value })
+        });
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({}));
+          setSummary(claimSummary, result.error ?? 'บันทึกไม่สำเร็จ', true);
+          button.disabled = false;
+          return;
+        }
+        await loadClaims();
+      } catch {
+        setSummary(claimSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        button.disabled = false;
+      }
+    });
+    claimStatusFilter.addEventListener('change', loadClaims);
+
+    // ===== ค่าจ้าง เบิกเงิน และจ่ายเงิน =====
+    const baht = value => formatMoney(value);
+    let payrollRows = [];
+    const kindLabel = kind => kind === 'advance' ? 'เบิกล่วงหน้า' : 'จ่ายเงิน';
+
+    async function loadPayroll() {
+      if (!payrollFrom.value || !payrollTo.value) return;
+      const employeeId = payrollEmployee.value;
+      try {
+        const query = `from=${payrollFrom.value}&to=${payrollTo.value}${employeeId ? `&employeeId=${employeeId}` : ''}`
+          + (payrollDepartment.value ? `&departmentId=${payrollDepartment.value}` : '');
+        const data = await fetch(`/api/payroll?${query}`).then(r => r.json());
+        if (data.error) { setSummary(payrollSummary, data.error, true); payrollTable.innerHTML = errorRow(12); return; }
+        payrollRows = data.rows ?? [];
+        const withoutType = payrollRows.filter(row => !row.has_type).length;
+        const totals = payrollRows.reduce((sum, row) => ({
+          net: sum.net + row.net_pay, advance: sum.advance + row.advance_total,
+          paid: sum.paid + row.payment_total, balance: sum.balance + row.balance
+        }), { net:0, advance:0, paid:0, balance:0 });
+        setSummary(payrollSummary, `${formatDay(payrollFrom.value)} ถึง ${formatDay(payrollTo.value)}`
+          + ` · พนักงาน ${payrollRows.length} คน · ยอดสุทธิรวม ${baht(totals.net)} บาท`
+          + ` · คงเหลือที่ต้องจ่าย ${baht(totals.balance)} บาท`
+          + (withoutType ? ` · ยังไม่กำหนดประเภท ${withoutType} คน จึงคิดเงินไม่ได้` : ''));
+
+        payrollTable.innerHTML = payrollRows.length ? payrollRows.map(row => {
+          const deduct = row.absent_deduct + row.late_deduct;
+          return `<tr>
+            <td class="ps-4 text-nowrap"><span class="fw-semibold">${esc(row.employee_code)}</span> <span class="text-secondary">${esc(row.name)}</span></td>
+            <td class="text-nowrap small">${row.has_type
+              ? `${esc(row.employee_type_name)}<div class="text-secondary">${payMethod(row.pay_type)} ${baht(row.pay_rate)} ${payUnit(row.pay_type)}</div>`
+              : '<span class="badge text-bg-warning">ยังไม่กำหนดประเภท</span>'}</td>
+            <td class="text-end">${row.worked_days}</td>
+            <td class="text-end ${row.absent_days ? 'text-danger fw-semibold' : 'text-secondary'}">${row.absent_days || ''}</td>
+            <td class="text-end text-secondary">${row.leave_days || ''}</td>
+            <td class="text-end" title="${row.has_type ? (row.pay_type === 'monthly' ? 'เงินเดือนเต็มเดือน' : `${row.worked_days} วัน × ${baht(row.pay_rate)} บาท`) : ''}">${row.has_type ? baht(row.base_pay) : dash}</td>
+            <td class="text-end" title="อนุมัติ ${row.ot_paid_minutes} จาก ${row.ot_minutes} นาที${row.ot_pending_minutes ? ` · รออนุมัติอีก ${row.ot_pending_minutes} นาที` : ''} × ${baht(row.hourly_rate)} บาท/ชม. × ${esc(row.ot_multiplier ?? 0)} เท่า">${row.ot_pay
+              ? `${baht(row.ot_pay)}${row.ot_pending_minutes ? ' <i class="bi bi-hourglass-split text-warning-emphasis"></i>' : ''}`
+              : row.ot_pending_minutes > 0 ? '<span class="badge text-bg-warning">รออนุมัติ</span>'
+              : row.ot_minutes ? '<span class="badge text-bg-secondary">ไม่อนุมัติ</span>' : ''}</td>
+            <td class="text-end ${deduct ? 'text-danger' : 'text-secondary'}" title="ขาดงาน ${baht(row.absent_deduct)} บาท · มาสาย ${baht(row.late_deduct)} บาท (${row.late_minutes} นาที)">${deduct ? baht(deduct) : ''}</td>
+            <td class="text-end fw-semibold">${row.has_type ? baht(row.net_pay) : dash}</td>
+            <td class="text-end text-secondary">${row.advance_total ? baht(row.advance_total) : ''}</td>
+            <td class="text-end text-secondary">${row.payment_total ? baht(row.payment_total) : ''}</td>
+            <td class="text-end pe-4 fw-semibold ${row.balance > 0 ? 'text-success-emphasis' : row.balance < 0 ? 'text-danger' : ''}">${row.has_type ? baht(row.balance) : dash}</td>
+          </tr>`;
+        }).join('') : emptyRow(13,'ไม่มีข้อมูลในช่วงที่เลือก');
+
+        payrollFoot.innerHTML = payrollRows.length ? `<tr class="table-light">
+          <td class="ps-4 fw-semibold" colspan="8">รวมทั้งช่วง</td>
+          <td class="text-end fw-semibold">${baht(totals.net)}</td>
+          <td class="text-end">${baht(totals.advance)}</td>
+          <td class="text-end">${baht(totals.paid)}</td>
+          <td class="text-end pe-4 fw-semibold">${baht(totals.balance)}</td></tr>` : '';
+      } catch {
+        setSummary(payrollSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        payrollTable.innerHTML = errorRow(12);
+        payrollFoot.innerHTML = '';
+      }
+    }
+
+    async function loadEntryList() {
+      try {
+        const kind = entryKindFilter.value;
+        const rows = await fetch(`/api/payroll/entries?from=${payrollFrom.value}&to=${payrollTo.value}${kind ? `&kind=${kind}` : ''}`).then(r => r.json());
+        const advance = rows.filter(row => row.kind === 'advance').reduce((sum, row) => sum + row.amount, 0);
+        const payment = rows.filter(row => row.kind === 'payment').reduce((sum, row) => sum + row.amount, 0);
+        setSummary(entryListSummary, `${formatDay(payrollFrom.value)} ถึง ${formatDay(payrollTo.value)}`
+          + ` · เบิกล่วงหน้า ${baht(advance)} บาท · จ่ายเงิน ${baht(payment)} บาท · ทั้งหมด ${rows.length} รายการ`);
+        entryTable.innerHTML = rows.length ? rows.map(row => `<tr>
+          <td class="ps-4 text-nowrap">${esc(formatDay(row.entry_date))}</td>
+          <td class="fw-semibold">${esc(row.employee_code)}</td>
+          <td>${esc(row.name)}</td>
+          <td>${row.kind === 'advance'
+            ? '<span class="badge text-bg-warning-subtle text-warning-emphasis">เบิกล่วงหน้า</span>'
+            : '<span class="badge text-bg-success-subtle text-success-emphasis">จ่ายเงิน</span>'}</td>
+          <td class="text-end fw-semibold">${baht(row.amount)}</td>
+          <td class="text-secondary">${esc(row.method) || '-'}</td>
+          <td class="text-secondary small">${esc(row.note) || '-'}</td>
+          <td class="pe-4 text-end"><button type="button" class="btn btn-sm btn-outline-secondary" data-delete-entry="${esc(row.id)}" title="ลบรายการ"><i class="bi bi-trash3"></i></button></td>
+        </tr>`).join('') : emptyRow(8,'ยังไม่มีรายการเบิกหรือจ่ายเงินในช่วงนี้');
+      } catch {
+        setSummary(entryListSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        entryTable.innerHTML = errorRow(8);
+      }
+    }
+
+    entrySaveBtn.addEventListener('click', async () => {
+      const label = entrySaveBtn.innerHTML;
+      entrySaveBtn.disabled = true;
+      entrySaveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังบันทึก';
+      try {
+        const response = await fetch('/api/payroll/entries', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify({ employeeId: entryEmployee.value, entryDate: entryDate.value, kind: entryKind.value,
+                                 amount: Number(entryAmount.value || 0), method: entryMethod.value, note: entryNote.value })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) { setSummary(entryFormSummary, result.error ?? 'บันทึกไม่สำเร็จ', true); return; }
+        setSummary(entryFormSummary, `บันทึก ${kindLabel(entryKind.value)} ${baht(result.amount)} บาท เรียบร้อย`);
+        entryAmount.value = '';
+        entryNote.value = '';
+        await loadEntryList();
+        await loadPayroll();
+      } catch {
+        setSummary(entryFormSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+      } finally {
+        entrySaveBtn.innerHTML = label;
+        entrySaveBtn.disabled = false;
+      }
+    });
+
+    entryTable.addEventListener('click', async event => {
+      const button = event.target.closest('button[data-delete-entry]');
+      if (!button) return;
+      if (!confirm('ลบรายการนี้?')) return;
+      await fetch(`/api/payroll/entries/${button.dataset.deleteEntry}`, { method:'DELETE' });
+      await loadEntryList();
+      await loadPayroll();
+    });
+
+    function downloadPayrollCsv() {
+      if (!payrollRows.length) return;
+      const header = ['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','ประเภท','วิธีจ่าย','อัตรา','วันทำงาน','ขาดงาน','วันลา',
+        'สาย (นาที)','OT (นาที)','ค่าแรงพื้นฐาน','ค่า OT','หักขาดงาน','หักสาย','ยอดสุทธิ','เบิกล่วงหน้า','จ่ายแล้ว','คงเหลือ'];
+      const lines = [header].concat(payrollRows.map(row => [row.employee_code, row.name, row.department_name ?? '', row.employee_type_name ?? '',
+        row.pay_type ? payMethod(row.pay_type) : '', row.pay_rate ?? '', row.worked_days, row.absent_days, row.leave_days,
+        row.late_minutes, row.ot_minutes, row.base_pay, row.ot_pay, row.absent_deduct, row.late_deduct,
+        row.net_pay, row.advance_total, row.payment_total, row.balance]));
+      const csv = '\uFEFF' + lines.map(line => line.map(value => `"${String(value ?? '').replace(/"/g,'""')}"`).join(',')).join('\r\n');
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([csv], { type:'text/csv;charset=utf-8' }));
+      link.download = `payroll-${payrollFrom.value}-${payrollTo.value}.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    [payrollFrom, payrollTo].forEach(element =>
+      element.addEventListener('change', () => { loadPayroll(); loadEntryList(); loadOt(); loadClaims(); }));
+    payrollEmployee.addEventListener('change', () => { loadPayroll(); loadOt(); loadClaims(); });
+    payrollDepartment.addEventListener('change', () => { syncEmployeeOptions(); loadPayroll(); loadOt(); loadClaims(); });
+    entryKindFilter.addEventListener('change', loadEntryList);
+    payrollThisMonth.addEventListener('click', () => { const [from, to] = monthRange(0); payrollFrom.value = from; payrollTo.value = to; loadPayroll(); loadEntryList(); loadOt(); });
+    payrollLastMonth.addEventListener('click', () => { const [from, to] = monthRange(-1); payrollFrom.value = from; payrollTo.value = to; loadPayroll(); loadEntryList(); loadOt(); });
+    payrollCsvBtn.addEventListener('click', downloadPayrollCsv);
+
+    // dropdown พนักงานของแต่ละหน้าต้องขึ้นแค่คนในกลุ่มที่เลือกไว้ในหน้านั้น
+    // ถ้าคนที่เลือกอยู่ไม่ได้อยู่ในกลุ่มใหม่ จะกลับไปเป็น พนักงานทั้งหมด
+    const EMPLOYEE_FILTER_PAIRS = () => [
+      { department: reportDepartment, employee: reportEmployee },
+      { department: payrollDepartment, employee: payrollEmployee },
+      { department: missingDepartment, employee: missingEmployee }
+    ];
+
+    function syncEmployeeOptions() {
+      for (const pair of EMPLOYEE_FILTER_PAIRS()) {
+        const previous = pair.employee.value;
+        const visible = employeesInDepartment(pair.department.value);
+        pair.employee.innerHTML = ['<option value="">พนักงานทั้งหมด</option>'].concat(visible.map(employee =>
+          `<option value="${esc(employee.id)}">${esc(employee.employee_code)} ${esc(employee.name)}</option>`)).join('');
+        pair.employee.value = visible.some(employee => String(employee.id) === previous) ? previous : '';
+      }
+    }
+
+    // ===== ลืมลงเวลา =====
+    const ISSUE_LABEL = {
+      missing_out: '<span class="badge text-bg-warning">ลืมลงเวลาออก</span>',
+      missing_in: '<span class="badge text-bg-warning">ลืมลงเวลาเข้า</span>',
+      absent: '<span class="badge text-bg-danger">ไม่มีการลงเวลาเลย</span>'
+    };
+
+    async function loadMissing() {
+      if (!missingFrom.value || !missingTo.value) return;
+      try {
+        const employeeId = missingEmployee.value;
+        const department = missingDepartment.value ? `&departmentId=${missingDepartment.value}` : '';
+        const rows = await fetch(`/api/time-logs/missing?from=${missingFrom.value}&to=${missingTo.value}${employeeId ? `&employeeId=${employeeId}` : ''}${department}`).then(r => r.json());
+        if (rows.error) { setSummary(missingSummary, rows.error, true); missingTable.innerHTML = errorRow(7); return; }
+        const counts = rows.reduce((sum, row) => ({ ...sum, [row.issue]: (sum[row.issue] ?? 0) + 1 }), {});
+        setSummary(missingSummary, rows.length
+          ? `${formatDay(missingFrom.value)} ถึง ${formatDay(missingTo.value)} · ต้องแก้ ${rows.length} รายการ`
+            + ` · ลืมลงเวลาออก ${counts.missing_out ?? 0} · ลืมลงเวลาเข้า ${counts.missing_in ?? 0} · ไม่มีการลงเวลาเลย ${counts.absent ?? 0}`
+          : `${formatDay(missingFrom.value)} ถึง ${formatDay(missingTo.value)} · ไม่มีรายการที่ต้องแก้`);
+        missingTable.innerHTML = rows.length ? rows.map(row => {
+          const needIn = row.issue !== 'missing_out';
+          const needOut = row.issue !== 'missing_in';
+          const inputs = [
+            needIn ? `<input class="form-control form-control-sm" type="time" data-fix-in value="${esc(row.shift_start)}" style="width:7.5rem" title="เวลาเข้า">` : '',
+            needOut ? `<input class="form-control form-control-sm" type="time" data-fix-out value="${esc(row.shift_end)}" style="width:7.5rem" title="เวลาออก">` : ''
+          ].join('');
+          return `<tr data-employee-id="${esc(row.employee_id)}" data-work-date="${esc(row.work_date)}">
+            <td class="ps-4 text-nowrap">${esc(formatDay(row.work_date))}</td>
+            <td class="text-nowrap"><span class="fw-semibold">${esc(row.employee_code)}</span> <span class="text-secondary">${esc(row.name)}</span></td>
+            <td class="text-nowrap text-secondary small">${esc(row.shift_name)} ${esc(row.shift_start)}–${esc(row.shift_end)}</td>
+            <td>${row.first_in ? `<span class="badge text-bg-success-subtle text-success-emphasis">${esc(row.first_in)}</span>` : dash}</td>
+            <td>${row.last_out ? `<span class="badge text-bg-success-subtle text-success-emphasis">${esc(row.last_out)}</span>` : dash}</td>
+            <td>${ISSUE_LABEL[row.issue] ?? dash}</td>
+            <td class="pe-4"><div class="d-flex gap-1 align-items-center">${inputs}
+              <button type="button" class="btn btn-sm btn-success text-nowrap" data-fix><i class="bi bi-check2 me-1"></i>บันทึก</button></div></td>
+          </tr>`;
+        }).join('') : emptyRow(7,'ไม่มีพนักงานที่ลืมลงเวลาในช่วงนี้');
+      } catch {
+        setSummary(missingSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        missingTable.innerHTML = errorRow(7);
+      }
+    }
+
+    async function loadManualList() {
+      try {
+        const employeeId = missingEmployee.value;
+        const rows = await fetch(`/api/time-logs/manual?from=${missingFrom.value}&to=${missingTo.value}${employeeId ? `&employeeId=${employeeId}` : ''}`).then(r => r.json());
+        setSummary(manualSummary, `${formatDay(missingFrom.value)} ถึง ${formatDay(missingTo.value)} · ทั้งหมด ${rows.length} รายการ`);
+        manualTable.innerHTML = rows.length ? rows.map(row => `<tr>
+          <td class="ps-4 text-nowrap">${esc(formatDay(row.work_date))}</td>
+          <td class="text-nowrap"><span class="fw-semibold">${esc(row.employee_code)}</span> <span class="text-secondary">${esc(row.name)}</span></td>
+          <td>${eventBadge(row.event_type)}</td>
+          <td class="fw-semibold">${esc(row.time_of_day)}</td>
+          <td class="text-secondary small">${esc(row.note) || '-'}</td>
+          <td class="text-secondary small">${esc(row.created_at)}</td>
+          <td class="pe-4 text-end"><button type="button" class="btn btn-sm btn-outline-secondary" data-delete-manual="${esc(row.id)}" title="ลบรายการที่บันทึกย้อนหลัง"><i class="bi bi-trash3"></i></button></td>
+        </tr>`).join('') : emptyRow(7,'ยังไม่มีรายการที่บันทึกย้อนหลังในช่วงนี้');
+      } catch {
+        setSummary(manualSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        manualTable.innerHTML = errorRow(7);
+      }
+    }
+
+    // เติมเวลาให้ทีละแถว ถ้าวันนั้นไม่มีทั้งเข้าและออกจะยิงสองครั้ง
+    missingTable.addEventListener('click', async event => {
+      const button = event.target.closest('button[data-fix]');
+      if (!button) return;
+      const row = button.closest('tr[data-employee-id]');
+      const timeIn = row.querySelector('input[data-fix-in]');
+      const timeOut = row.querySelector('input[data-fix-out]');
+      const jobs = [];
+      if (timeIn?.value) jobs.push({ eventType:'check_in', time:timeIn.value });
+      if (timeOut?.value) jobs.push({ eventType:'check_out', time:timeOut.value });
+      if (!jobs.length) { setSummary(missingSummary, 'ต้องกรอกเวลาก่อนบันทึก', true); return; }
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+      const failures = [];
+      for (const job of jobs) {
+        try {
+          const response = await fetch('/api/time-logs/manual', {
+            method: 'POST',
+            headers: { 'Content-Type':'application/json' },
+            body: JSON.stringify({ employeeId: row.dataset.employeeId, workDate: row.dataset.workDate,
+                                   eventType: job.eventType, time: job.time, note: missingNote.value })
+          });
+          if (!response.ok) {
+            const result = await response.json().catch(() => ({}));
+            failures.push(result.error ?? 'บันทึกไม่สำเร็จ');
+          }
+        } catch {
+          failures.push('ไม่สามารถเชื่อมต่อ API ได้');
+        }
+      }
+      await loadMissing();
+      await loadManualList();
+      await loadDashboard();
+      if (failures.length) setSummary(missingSummary, failures[0], true);
+    });
+
+    manualTable.addEventListener('click', async event => {
+      const button = event.target.closest('button[data-delete-manual]');
+      if (!button) return;
+      if (!confirm('ลบเวลาที่บันทึกย้อนหลังรายการนี้?')) return;
+      const response = await fetch(`/api/time-logs/manual/${button.dataset.deleteManual}`, { method:'DELETE' });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        setSummary(manualSummary, result.error ?? 'ลบไม่สำเร็จ', true);
+      }
+      await loadMissing();
+      await loadManualList();
+      await loadDashboard();
+    });
+
+    [missingFrom, missingTo, missingEmployee].forEach(element =>
+      element.addEventListener('change', () => { loadMissing(); loadManualList(); }));
+    missingDepartment.addEventListener('change', () => { syncEmployeeOptions(); loadMissing(); loadManualList(); });
+    missingLast7.addEventListener('click', () => {
+      missingFrom.value = addDays(bangkokToday(), -7);
+      missingTo.value = addDays(bangkokToday(), -1);
+      loadMissing(); loadManualList();
+    });
+    missingThisMonth.addEventListener('click', () => {
+      const [from, to] = monthRange(0);
+      missingFrom.value = from;
+      missingTo.value = to;
+      loadMissing(); loadManualList();
+    });
+
+    // ===== รายงาน =====
+    const minutesToHm = minutes => minutes === null || minutes === undefined ? '' : `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2,'0')}`;
+    const reportStatus = row => row.leave_type ? row.leave_type : (row.is_workday ? 'วันทำงาน' : 'วันหยุด');
+    // หมายเหตุสรุปจากข้อมูลที่มี ลาสำคัญกว่าการขาดสแกน
+    const reportRemark = row => {
+      if (row.leave_type) return row.leave_note || row.leave_type;
+      if (!row.is_workday) return (row.first_in || row.last_out) ? 'ลงเวลานอกตาราง' : '';
+      if (!row.first_in && !row.last_out) return 'ขาดงาน';
+      if (!row.last_out) return 'ไม่สแกนออก';
+      if (!row.first_in) return 'ไม่สแกนเข้า';
+      return '';
+    };
+    let reportRows = [];
+
+    function setReportRange(from, to) { reportFrom.value = from; reportTo.value = to; loadReport(); }
+    const monthRange = offset => {
+      const base = new Date(`${bangkokToday()}T00:00:00`);
+      const first = new Date(base.getFullYear(), base.getMonth() + offset, 1);
+      const last = new Date(base.getFullYear(), base.getMonth() + offset + 1, 0);
+      const end = offset === 0 && toIsoDate(last) > bangkokToday() ? bangkokToday() : toIsoDate(last);
+      return [toIsoDate(first), end];
+    };
+
+    async function loadReport() {
+      if (!reportFrom.value || !reportTo.value) return;
+      const employeeId = reportEmployee.value;
+      try {
+        const query = `from=${reportFrom.value}&to=${reportTo.value}${employeeId ? `&employeeId=${employeeId}` : ''}`
+          + (reportDepartment.value ? `&departmentId=${reportDepartment.value}` : '');
+        const data = await fetch(`/api/reports/attendance?${query}`).then(r => r.json());
+        if (data.error) { setSummary(reportSummary, data.error, true); reportTable.innerHTML = errorRow(12); return; }
+        reportRows = data.rows ?? [];
+        const workdays = reportRows.filter(row => row.is_workday && !row.leave_type).length;
+        const lateRows = reportRows.filter(row => row.late_minutes > 0);
+        const absent = reportRows.filter(row => row.is_workday && !row.leave_type && !row.first_in && !row.last_out).length;
+        const leaveDays = reportRows.filter(row => row.leave_type).length;
+        const missingOut = reportRows.filter(row => row.first_in && !row.last_out).length;
+        const totalWorked = reportRows.reduce((sum, row) => sum + (row.worked_minutes ?? 0), 0);
+        const totalOt = reportRows.reduce((sum, row) => sum + (row.ot_minutes ?? 0), 0);
+        const totalLate = lateRows.reduce((sum, row) => sum + row.late_minutes, 0);
+        setSummary(reportSummary, `${formatDay(reportFrom.value)} ถึง ${formatDay(reportTo.value)}`
+          + ` · วันทำงาน ${workdays} วัน · มาสาย ${lateRows.length} ครั้ง รวม ${totalLate} นาที`
+          + ` · ขาดงาน ${absent} วัน · ลา ${leaveDays} วัน · ไม่สแกนออก ${missingOut} ครั้ง`);
+
+        reportTable.innerHTML = reportRows.length ? reportRows.map(row => {
+          const remark = reportRemark(row);
+          const late = row.late_minutes;
+          return `<tr>
+            <td class="ps-4 text-nowrap">${esc(formatDay(row.work_date))}</td>
+            <td class="text-nowrap"><span class="fw-semibold">${esc(row.employee_code)}</span> <span class="text-secondary">${esc(row.name)}</span></td>
+            <td class="text-nowrap small text-secondary">${esc(row.department_name) || dash}</td>
+            <td class="text-nowrap">${row.leave_type
+              ? `<span class="badge text-bg-warning-subtle text-warning-emphasis">${esc(row.leave_type)}</span>`
+              : row.is_workday ? '<span class="text-success-emphasis">วันทำงาน</span>' : '<span class="text-secondary">วันหยุด</span>'}</td>
+            <td class="text-nowrap text-secondary">${row.shift_name ? `${esc(row.shift_name)} ${esc(row.shift_start)}–${esc(row.shift_end)}` : dash}</td>
+            <td class="text-nowrap">${row.first_in ? `<span class="badge text-bg-success-subtle text-success-emphasis">${esc(row.first_in)}</span>` : dash}</td>
+            <td class="text-nowrap">${row.last_out ? `<span class="badge text-bg-success-subtle text-success-emphasis">${esc(row.last_out)}</span>` : dash}</td>
+            <td class="text-end ${late > 0 ? 'text-danger fw-semibold' : 'text-secondary'}">${late === null || late === undefined ? '' : (late > 0 ? late : '0')}</td>
+            <td class="text-end text-secondary">${row.early_minutes > 0 ? row.early_minutes : ''}</td>
+            <td class="text-end ${row.ot_minutes > 0 && !row.ot_approved ? 'text-warning-emphasis' : 'text-secondary'}"
+                title="${row.ot_minutes > 0
+                  ? (!row.ot_approved ? 'ยังไม่อนุมัติ จึงไม่จ่ายเงิน OT'
+                     : row.ot_paid_minutes > 0 ? `อนุมัติแล้ว ${row.ot_paid_minutes} นาที` : `ไม่อนุมัติ${row.ot_note ? ' · ' + row.ot_note : ''}`)
+                  : ''}">${row.ot_minutes > 0
+              ? `${row.ot_minutes} ${!row.ot_approved ? '<i class="bi bi-hourglass-split"></i>'
+                  : row.ot_paid_minutes > 0 ? '<i class="bi bi-check2 text-success"></i>' : '<i class="bi bi-x-lg text-danger"></i>'}` : ''}</td>
+            <td class="text-end text-secondary">${row.is_workday ? esc(row.break_minutes) : ''}</td>
+            <td class="text-end fw-semibold">${minutesToHm(row.worked_minutes)}</td>
+            <td class="pe-4 small ${remark === 'ขาดงาน' || remark === 'ไม่สแกนออก' || remark === 'ไม่สแกนเข้า' ? 'text-danger' : 'text-secondary'}">${esc(remark)}</td>
+          </tr>`;
+        }).join('') : emptyRow(12,'ไม่มีข้อมูลในช่วงที่เลือก');
+
+        reportFoot.innerHTML = reportRows.length ? `<tr class="table-light">
+          <td class="ps-4 fw-semibold" colspan="7">รวมทั้งช่วง</td>
+          <td class="text-end fw-semibold">${totalLate || ''}</td>
+          <td colspan="2"></td>
+          <td class="text-end text-secondary">OT ${minutesToHm(totalOt) || '0:00'}</td>
+          <td class="text-end fw-semibold">${minutesToHm(totalWorked) || '0:00'}</td>
+          <td class="pe-4"></td></tr>` : '';
+      } catch {
+        setSummary(reportSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        reportTable.innerHTML = errorRow(13);
+        reportFoot.innerHTML = '';
+      }
+    }
+
+    function downloadReportCsv() {
+      if (!reportRows.length) return;
+      const header = ['วันที่','รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','สถานะ','กะ','เข้ากะ','ออกกะ','เข้า','ออก','สาย (นาที)','ออกก่อน (นาที)','OT (นาที)','พัก (นาที)','เวลาทำ','หมายเหตุ'];
+      const lines = [header].concat(reportRows.map(row => [row.work_date, row.employee_code, row.name, row.department_name ?? '', reportStatus(row),
+        row.shift_name ?? '', row.shift_start ?? '', row.shift_end ?? '', row.first_in ?? '', row.last_out ?? '',
+        row.late_minutes ?? '', row.early_minutes ?? '', row.ot_minutes ?? '', row.is_workday ? row.break_minutes : '',
+        minutesToHm(row.worked_minutes), reportRemark(row)]));
+      const csv = '\uFEFF' + lines.map(line => line.map(value => `"${String(value ?? '').replace(/"/g,'""')}"`).join(',')).join('\r\n');
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([csv], { type:'text/csv;charset=utf-8' }));
+      link.download = `timework-${reportFrom.value}-${reportTo.value}.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    [reportFrom, reportTo, reportEmployee].forEach(element => element.addEventListener('change', loadReport));
+    reportDepartment.addEventListener('change', () => { syncEmployeeOptions(); loadReport(); });
+    reportThisMonth.addEventListener('click', () => setReportRange(...monthRange(0)));
+    reportLastMonth.addEventListener('click', () => setReportRange(...monthRange(-1)));
+    reportLast7.addEventListener('click', () => setReportRange(addDays(bangkokToday(), -6), bangkokToday()));
+    reportCsvBtn.addEventListener('click', downloadReportCsv);
+
+    weekPrev.addEventListener('click', () => { weekStart = addDays(weekStart, -7); loadWeekGrid(); });
+    weekNext.addEventListener('click', () => { weekStart = addDays(weekStart, 7); loadWeekGrid(); });
+    weekToday.addEventListener('click', () => { weekStart = mondayOf(bangkokToday()); loadWeekGrid(); });
+
+    // ส่งฟอร์มไปที่ API แล้วแสดงข้อความ error ที่ API ส่งกลับมาถ้าไม่สำเร็จ
+    async function submitForm({ url, method, body, errorBox, button }) {
+      button.disabled = true;
+      try {
+        const response = await fetch(url, { method, headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) { errorBox.textContent = result.error ?? 'บันทึกไม่สำเร็จ'; return false; }
+        await loadDashboard();
+        return true;
+      } catch {
+        errorBox.textContent = 'ไม่สามารถเชื่อมต่อ API ได้';
+        return false;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    employeesTable.addEventListener('click', event => {
+      const row = event.target.closest('tr[data-id]');
+      if (!row) return;
+      const employee = employeeList.find(e => String(e.id) === row.dataset.id);
+      if (employee) openEmployeeForm(employee);
+    });
+
+    shiftsTable.addEventListener('click', event => {
+      const row = event.target.closest('tr[data-shift-id]');
+      if (!row) return;
+      const shift = shiftList.find(s => String(s.id) === row.dataset.shiftId);
+      if (shift) openShiftForm(shift);
+    });
+
+    employeeForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      formError.textContent = '';
+      const details = {
+        name: employeeName.value,
+        nationalId: nationalId.value,
+        phone: phone.value,
+        shiftId: shiftSelect.value,
+        employeeTypeId: typeSelect.value,
+        departmentId: deptSelect.value,
+        startDate: startDate.value,
+        ethnicity: ethnicity.value,
+        address: address.value
+      };
+      const editing = Boolean(employeeId.value);
+      const ok = await submitForm(editing
+        ? { url:`/api/employees/${employeeId.value}`, method:'PATCH', body:{ ...details, active: activeToggle.checked, canSubmitExpense: expensePermToggle.checked }, errorBox:formError, button:submitBtn }
+        : { url:'/api/employees', method:'POST', body:{ ...details, employeeCode: employeeCode.value, lineUserId: lineUserId.value }, errorBox:formError, button:submitBtn });
+      if (!ok) return;
+      employeeModal.hide();
+      if (!editing) location.hash = '#employees';
+    });
+
+    shiftForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      shiftFormError.textContent = '';
+      const body = { name: shiftName.value, startTime: shiftStart.value, endTime: shiftEnd.value,
+        graceMinutes: Number(shiftGrace.value || 0), breakMinutes: Number(shiftBreak.value || 0) };
+      const editing = Boolean(shiftRecordId.value);
+      const ok = await submitForm(editing
+        ? { url:`/api/shifts/${shiftRecordId.value}`, method:'PATCH', body:{ ...body, active: shiftActiveToggle.checked }, errorBox:shiftFormError, button:shiftSubmitBtn }
+        : { url:'/api/shifts', method:'POST', body, errorBox:shiftFormError, button:shiftSubmitBtn });
+      if (!ok) return;
+      shiftModal.hide();
+      if (!editing) location.hash = '#shifts';
+    });
+
+    sitesTable.addEventListener('click', event => {
+      const row = event.target.closest('tr[data-site-id]');
+      if (!row) return;
+      const site = siteList.find(item => String(item.id) === row.dataset.siteId);
+      if (site) openSiteForm(site);
+    });
+
+    // พิกัดที่ Google Maps ให้มามีทศนิยมยาวมาก ต้องปัดเป็น 6 ตำแหน่ง
+    // ไม่อย่างนั้นช่อง number จะฟ้องว่าค่าไม่ถูกต้องและกดบันทึกไม่ได้
+    const roundCoordinate = value => Number(Number(value).toFixed(6));
+
+    // รับได้ทั้ง "lat, lng" "lat lng" และลิงก์ Google Maps ที่มี @lat,lng หรือ q=lat,lng
+    function extractCoordinates(text) {
+      const cleaned = String(text ?? '').trim();
+      const patterns = [
+        /^(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)$/,
+        /[@?&](?:q=|ll=)?(-?\d+\.\d+),(-?\d+\.\d+)/
+      ];
+      for (const pattern of patterns) {
+        const match = cleaned.match(pattern);
+        if (!match) continue;
+        const latitude = Number(match[1]);
+        const longitude = Number(match[2]);
+        if (Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180) return { latitude, longitude };
+      }
+      return null;
+    }
+
+    sitePaste.addEventListener('input', () => {
+      const coordinates = extractCoordinates(sitePaste.value);
+      if (!coordinates) return;
+      siteLat.value = roundCoordinate(coordinates.latitude);
+      siteLng.value = roundCoordinate(coordinates.longitude);
+      updateSiteMapLink();
+    });
+    [siteLat, siteLng].forEach(element => element.addEventListener('input', updateSiteMapLink));
+    // GPS มือถือคลาดได้ราว 10 ถึง 30 เมตร รัศมีแคบเกินไปจะฟ้องนอกพื้นที่ทั้งที่อยู่ที่ทำงานจริง
+    siteRadius.addEventListener('input', () => {
+      const radius = Number(siteRadius.value);
+      const tight = Number.isFinite(radius) && radius > 0 && radius < 80;
+      siteRadiusHint.textContent = tight
+        ? 'รัศมีแคบกว่าความแม่นยำของ GPS มือถือ (ราว 10 ถึง 30 เมตร) อาจฟ้องนอกพื้นที่ทั้งที่อยู่ที่ทำงานจริง แนะนำ 100 ถึง 200 เมตร'
+        : '20 ถึง 20,000 เมตร แนะนำ 100 ถึง 200';
+      siteRadiusHint.classList.toggle('text-danger', tight);
+    });
+
+    siteForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      siteFormError.textContent = '';
+      const body = { name: siteName.value,
+        latitude: roundCoordinate(siteLat.value), longitude: roundCoordinate(siteLng.value),
+        radiusM: Number(siteRadius.value || 200), note: siteNote.value };
+      const editing = Boolean(siteRecordId.value);
+      const ok = await submitForm(editing
+        ? { url:`/api/work-sites/${siteRecordId.value}`, method:'PATCH', body:{ ...body, active: siteActiveToggle.checked }, errorBox:siteFormError, button:siteSubmitBtn }
+        : { url:'/api/work-sites', method:'POST', body, errorBox:siteFormError, button:siteSubmitBtn });
+      if (!ok) return;
+      siteModal.hide();
+      if (!editing) location.hash = '#settings';
+    });
+
+    addSiteBtn.addEventListener('click', () => openSiteForm(null));
+
+    deptsTable.addEventListener('click', event => {
+      const row = event.target.closest('tr[data-dept-id]');
+      if (!row) return;
+      const department = deptList.find(item => String(item.id) === row.dataset.deptId);
+      if (department) openDeptForm(department);
+    });
+
+    deptForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      deptFormError.textContent = '';
+      const body = { name: deptName.value, note: deptNote.value };
+      const editing = Boolean(deptRecordId.value);
+      const ok = await submitForm(editing
+        ? { url:`/api/departments/${deptRecordId.value}`, method:'PATCH', body:{ ...body, active: deptActiveToggle.checked }, errorBox:deptFormError, button:deptSubmitBtn }
+        : { url:'/api/departments', method:'POST', body, errorBox:deptFormError, button:deptSubmitBtn });
+      if (!ok) return;
+      deptModal.hide();
+      if (!editing) location.hash = '#settings';
+    });
+
+    addDeptBtn.addEventListener('click', () => openDeptForm(null));
+
+    typesTable.addEventListener('click', event => {
+      const row = event.target.closest('tr[data-type-id]');
+      if (!row) return;
+      const type = typeList.find(item => String(item.id) === row.dataset.typeId);
+      if (type) openTypeForm(type);
+    });
+
+    // ช่องหารเงินเดือนใช้เฉพาะรายเดือน และแสดงผลหารให้เห็นทันทีที่พิมพ์
+    function updateTypeRatePreview() {
+      const monthly = typePayType.value === 'monthly';
+      typeRateHint.textContent = payUnit(typePayType.value);
+      typeDivisorField.classList.toggle('d-none', !monthly);
+      const rate = Number(typePayRate.value || 0);
+      const divisor = Math.max(1, Number(typeDivisor.value || 30));
+      const hours = Math.max(0.5, Number(typeWorkHours.value || 8));
+      const dailyRate = monthly ? rate / divisor : rate;
+      const hourlyRate = dailyRate / hours;
+      const otRate = hourlyRate * Number(typeOtMultiplier.value || 0);
+      typeRatePreview.innerHTML = monthly
+        ? `เงินเดือน ${formatMoney(rate)} ÷ ${divisor} วัน = <span class="fw-semibold">ค่าแรงวันละ ${formatMoney(dailyRate)} บาท</span>`
+          + ` · ÷ ${hours} ชม. = ชั่วโมงละ ${formatMoney(hourlyRate)} บาท · OT ชั่วโมงละ ${formatMoney(otRate)} บาท`
+        : `ค่าแรงวันละ ${formatMoney(dailyRate)} บาท ÷ ${hours} ชม. = ชั่วโมงละ ${formatMoney(hourlyRate)} บาท`
+          + ` · OT ชั่วโมงละ ${formatMoney(otRate)} บาท`;
+    }
+    [typePayType, typePayRate, typeDivisor, typeWorkHours, typeOtMultiplier].forEach(element => {
+      element.addEventListener('input', updateTypeRatePreview);
+      element.addEventListener('change', updateTypeRatePreview);
+    });
+
+    typeForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      typeFormError.textContent = '';
+      const body = { name: typeName.value, payType: typePayType.value, payRate: Number(typePayRate.value || 0),
+        note: typeNote.value, otMultiplier: Number(typeOtMultiplier.value || 0),
+        lateDeductPerMinute: Number(typeLateDeduct.value || 0), monthlyDaysDivisor: Number(typeDivisor.value || 30),
+        workHoursPerDay: Number(typeWorkHours.value || 8) };
+      const editing = Boolean(typeRecordId.value);
+      const ok = await submitForm(editing
+        ? { url:`/api/employee-types/${typeRecordId.value}`, method:'PATCH', body:{ ...body, active: typeActiveToggle.checked }, errorBox:typeFormError, button:typeSubmitBtn }
+        : { url:'/api/employee-types', method:'POST', body, errorBox:typeFormError, button:typeSubmitBtn });
+      if (!ok) return;
+      typeModal.hide();
+      if (!editing) location.hash = '#settings';
+    });
+
+    addTypeBtn.addEventListener('click', () => openTypeForm(null));
+    addEmployeeBtn.addEventListener('click', () => openEmployeeForm(null));
+    addShiftBtn.addEventListener('click', () => openShiftForm(null));
+    // loadDashboard โหลดแค่ข้อมูลที่ใช้ร่วมกัน แต่ละหน้ามีตารางของตัวเองที่ต้องโหลดเพิ่ม
+    const PAGE_LOADERS = {
+      schedule: () => [loadDaySchedule()],
+      leaves: () => [loadLeaveList()],
+      missing: () => [loadMissing(), loadManualList()],
+      reports: () => [loadReport()],
+      payroll: () => [loadPayroll(), loadEntryList(), loadOt(), loadClaims()]
+    };
+
+    async function refreshActivePage() {
+      const label = refreshBtn.innerHTML;
+      refreshBtn.disabled = true;
+      refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+      try {
+        await loadDashboard();
+        await Promise.all((PAGE_LOADERS[activePage] ?? (() => []))());
+        lastUpdated.textContent = `อัปเดตล่าสุด ${new Intl.DateTimeFormat('th-TH',{ hour:'2-digit', minute:'2-digit', second:'2-digit' }).format(new Date())}`;
+      } finally {
+        refreshBtn.innerHTML = label;
+        refreshBtn.disabled = false;
+      }
+    }
+
+    refreshBtn.addEventListener('click', refreshActivePage);
+    window.addEventListener('hashchange', () => {
+      route();
+      // โหลดตารางของหน้าที่เพิ่งเปิด เพื่อไม่ให้เห็นข้อมูลค้างจากรอบก่อน
+      Promise.all((PAGE_LOADERS[activePage] ?? (() => []))()).catch(() => {});
+    });
+    dayDate.value = bangkokToday();
+    setBulkRange(1);
+    leaveFrom.value = bangkokToday();
+    leaveTo.value = bangkokToday();
+    const [monthFirst, monthLast] = monthRange(0);
+    leaveListFrom.value = monthFirst;
+    leaveListTo.value = monthLast;
+    reportFrom.value = monthFirst;
+    reportTo.value = monthLast;
+    payrollFrom.value = monthFirst;
+    payrollTo.value = monthLast;
+    missingFrom.value = monthFirst;
+    missingTo.value = monthLast;
+    entryDate.value = bangkokToday();
+    route();
+    fetch('/api/leaves/types').then(r => r.json()).then(types => { leaveTypes = types; renderLeaveControls(); }).catch(() => {});
+    loadDashboard();
+    loadDaySchedule();
+    loadLeaveList();
+    loadReport();
+    loadPayroll();
+    loadEntryList();
+    loadOt();
+    loadClaims();
+    loadMissing();
+    loadManualList();
+  </script>
+</body>
+</html>
