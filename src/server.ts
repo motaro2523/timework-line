@@ -51,7 +51,9 @@ function presentedAdminKey(request: FastifyRequest) {
 app.addHook('onRequest', async (request, reply) => {
   const pathname = request.url.split('?')[0];
   // /liff ยืนยันตัวตนด้วย access token ของ LINE แทนคีย์ผู้ดูแล จึงไม่ผ่าน hook นี้
-  const PUBLIC_PATHS = ['/health', '/webhooks/line', '/liff', '/liff.html', '/api/liff/config', '/api/liff/status',
+  const PUBLIC_PATHS = ['/health', '/webhooks/line', '/liff', '/liff.html',
+    '/liff/pay', '/liff/advance', '/liff/expense',
+    '/api/liff/config', '/api/liff/status',
     '/api/liff/check-in', '/api/liff/summary', '/api/liff/expenses', '/api/liff/expenses/cancel'];
   if (PUBLIC_PATHS.includes(pathname)) return;
   if (!adminKey) {
@@ -712,7 +714,10 @@ app.post<{ Body: { accessToken?: string; id?: string | number } }>('/api/liff/ex
   return reply.code(204).send();
 });
 
-app.get('/liff', async (request, reply) => reply.sendFile('liff.html'));
+// แต่ละหน้าของพนักงานมี URL ของตัวเอง ริชเมนูชี้มาหน้าไหนก็เห็นเฉพาะหน้านั้น
+for (const path of ['/liff', '/liff/pay', '/liff/advance', '/liff/expense']) {
+  app.get(path, async (request, reply) => reply.sendFile('liff.html'));
+}
 
 // ===== วันที่พนักงานลืมลงเวลา =====
 // ดูเฉพาะวันที่ผ่านมาแล้ว วันนี้ยังไม่นับว่าลืมเพราะอาจยังไม่เลิกงาน

@@ -11,11 +11,6 @@
     .card { border:0; border-radius:1rem; box-shadow:0 .3rem 1rem rgba(29,47,64,.08); }
     .btn-lg { padding:.9rem 1rem; font-size:1.05rem; }
     .brand { background:linear-gradient(180deg,#075a35,#087e45); color:#fff; border-radius:1rem; }
-    .tabs { display:grid; grid-template-columns:repeat(4,1fr); gap:.4rem; margin:.75rem 0; }
-    .tabs button { border:0; border-radius:.8rem; background:#fff; color:#546e7a; padding:.6rem .2rem;
-      font-size:.78rem; line-height:1.2; box-shadow:0 .2rem .6rem rgba(29,47,64,.06); }
-    .tabs button.active { background:#087e45; color:#fff; }
-    .tabs button i { display:block; font-size:1.15rem; margin-bottom:.15rem; }
     .money { font-size:1.6rem; font-weight:700; }
     .row-line { display:flex; justify-content:space-between; padding:.35rem 0; border-bottom:1px solid #eceff1; }
     .row-line:last-child { border-bottom:0; }
@@ -29,14 +24,9 @@
         <div class="fw-bold" id="brandTitle">TimeWork</div>
         <small class="text-white-50" id="brandSub">กำลังโหลด...</small>
       </div>
+      <span class="badge text-bg-light text-success-emphasis align-self-start" id="pageTitle">ลงเวลา</span>
     </div>
 
-    <div class="tabs d-none" id="tabs">
-      <button data-tab="checkin"><i class="bi bi-clock"></i>ลงเวลา</button>
-      <button data-tab="pay"><i class="bi bi-cash-coin"></i>ค่าตอบแทน</button>
-      <button data-tab="advance"><i class="bi bi-wallet2"></i>เงินที่เบิก</button>
-      <button data-tab="expense" class="d-none" id="tabExpense"><i class="bi bi-receipt"></i>ค่าใช้จ่าย</button>
-    </div>
 
     <!-- ลงเวลา -->
     <div id="view-checkin">
@@ -120,12 +110,15 @@
 
     // ---------- แท็บ ----------
     const TABS = ['checkin','pay','advance','expense'];
+    const PAGE_TITLE = { checkin:'ลงเวลาเข้า/ออก', pay:'ค่าตอบแทน', advance:'เงินที่เบิก', expense:'ค่าใช้จ่าย' };
+
+    // แต่ละ URL คือหน้าเดียว ไม่มีแถบแท็บ ให้ริชเมนูใน LINE เป็นตัวนำทาง
     function showTab(tab) {
       activeTab = TABS.includes(tab) ? tab : 'checkin';
       for (const name of TABS) $(`view-${name}`).classList.toggle('d-none', name !== activeTab);
-      document.querySelectorAll('.tabs button').forEach(button =>
-        button.classList.toggle('active', button.dataset.tab === activeTab));
       $('monthCard').classList.toggle('d-none', activeTab === 'checkin');
+      $('pageTitle').textContent = PAGE_TITLE[activeTab];
+      document.title = `TimeWork ${PAGE_TITLE[activeTab]}`;
       if (activeTab !== 'checkin' && !summary) loadSummary();
     }
 
@@ -157,10 +150,12 @@
         <div class="small"><i class="bi bi-clock me-1"></i>กะวันนี้: ${shift}</div>`;
       $('brandTitle').textContent = status.name;
       $('brandSub').textContent = new Intl.DateTimeFormat('th-TH',{ dateStyle:'full' }).format(new Date());
-      $('tabs').classList.remove('d-none');
-      // รู้สิทธิ์ตั้งแต่โหลดแรก แท็บค่าใช้จ่ายจะได้ไม่หายไปจนกว่าจะกดแท็บอื่น
-      if (status.can_submit_expense !== undefined) {
-        $('tabExpense').classList.toggle('d-none', !status.can_submit_expense);
+      // หน้าค่าใช้จ่ายเปิดได้เฉพาะคนที่มีสิทธิ์ ถ้าไม่มีให้บอกให้ชัดแทนหน้าว่าง
+      if (activeTab === 'expense' && status.can_submit_expense === false) {
+        $('view-expense').innerHTML = alertBox('warning',
+          '<div class="fw-semibold">บัญชีของคุณยังไม่ได้รับสิทธิ์ส่งรายการค่าใช้จ่าย</div>'
+          + '<div class="small mt-1">กรุณาแจ้งผู้ดูแลเพื่อเปิดสิทธิ์</div>');
+        $('monthCard').classList.add('d-none');
       }
     }
 
@@ -261,7 +256,6 @@
           return;
         }
         summary = data;
-        $('tabExpense').classList.toggle('d-none', !data.can_submit_expense);
         renderPay(data);
         renderAdvance(data);
         renderExpenses(data);
@@ -386,8 +380,6 @@
     }
 
     // ---------- เหตุการณ์ ----------
-    document.querySelectorAll('.tabs button').forEach(button =>
-      button.addEventListener('click', () => showTab(button.dataset.tab)));
     $('monthPrev').addEventListener('click', () => { month = shiftMonth(month, -1); summary = null; loadSummary(); });
     $('monthNext').addEventListener('click', () => { month = shiftMonth(month, 1); summary = null; loadSummary(); });
     function shiftMonth(value, step) {
@@ -411,11 +403,15 @@
     $('checkInBtn').addEventListener('click', () => submitCheck('check_in', $('checkInBtn')));
     $('checkOutBtn').addEventListener('click', () => submitCheck('check_out', $('checkOutBtn')));
 
-    // เปิดแท็บตรงจากริชเมนูได้ เช่น ...liff.line.me/<id>?p=pay
+    // ริชเมนูชี้มาได้ทั้งแบบ /liff/pay และ ?p=pay
     function requestedTab() {
+      const fromPath = location.pathname.replace(/^\/liff\/?/, '').replace(/\.html$/, '');
       const fromQuery = new URLSearchParams(location.search).get('p');
       const fromHash = location.hash.replace('#','');
-      return TABS.includes(fromQuery) ? fromQuery : (TABS.includes(fromHash) ? fromHash : 'checkin');
+      for (const candidate of [fromPath, fromQuery, fromHash]) {
+        if (TABS.includes(candidate)) return candidate;
+      }
+      return 'checkin';
     }
 
     async function start() {
@@ -433,10 +429,12 @@
           return;
         }
         $('expenseDate').value = bangkokToday();
+        activeTab = requestedTab();
         const status = await loadStatus();
         if (!status) return;
-        showTab(requestedTab());
+        showTab(activeTab);
         if (activeTab === 'checkin') locate();
+        else loadSummary();
       } catch (error) {
         $('employeeCard').innerHTML = alertBox('danger', `เปิดหน้าไม่สำเร็จ: ${esc(error && error.message)}`);
       }
