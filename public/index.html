@@ -14,6 +14,10 @@
     .stat-card .stat-label { font-size:13px; color:#607d8b; }
     .stat-card .stat-value { font-size:24px; font-weight:700; }
     .perm-row { border:1px solid #eceff1; border-radius:12px; padding:10px 12px; }
+    .kind-btn { background:#fff; color:#607d8b; border:1px solid #e0e6ec; border-radius:10px; padding:10px; font-weight:600; }
+    .kind-btn:hover { border-color:#b0bec5; color:#455a64; }
+    .kind-btn.active[data-entry-kind="advance"] { background:#fff3cd; color:#7a4f01; border-color:#ffe08a; }
+    .kind-btn.active[data-entry-kind="payment"] { background:#d7f2e3; color:#0b5f38; border-color:#9fdcbd; }
     body { background:#f4f7fb; color:#263238; }
     .sidebar { width:264px; min-height:100vh; background:linear-gradient(180deg,#075a35,#087e45); }
     .brand { font-weight:700; letter-spacing:.2px; }
@@ -512,37 +516,38 @@
             <small class="text-secondary" id="entryFormSummary">เลือกพนักงาน วันที่ ประเภทรายการ และจำนวนเงิน</small>
           </div>
           <div class="card-body px-4 pb-4">
+            <input type="hidden" id="entryKind" value="advance">
             <div class="row g-3">
-              <div class="col-lg-3">
-                <label class="form-label" for="entryEmployee">พนักงาน <span class="text-danger">*</span></label>
-                <select class="form-select form-select-sm" id="entryEmployee"></select>
+              <div class="col-12">
+                <label class="form-label mb-1" for="entryEmployee">พนักงาน <span class="text-danger">*</span></label>
+                <select class="form-select" id="entryEmployee"></select>
               </div>
-              <div class="col-lg-2">
-                <label class="form-label" for="entryDate">วันที่ <span class="text-danger">*</span></label>
-                <input class="form-control form-control-sm" type="date" id="entryDate">
+              <div class="col-sm-6">
+                <label class="form-label mb-1" for="entryDate">วันที่ <span class="text-danger">*</span></label>
+                <input class="form-control" type="date" id="entryDate">
               </div>
-              <div class="col-lg-2">
-                <label class="form-label" for="entryKind">ประเภทรายการ</label>
-                <select class="form-select form-select-sm" id="entryKind">
-                  <option value="advance">เบิกล่วงหน้า</option>
-                  <option value="payment">จ่ายเงิน</option>
-                </select>
+              <div class="col-sm-6">
+                <label class="form-label mb-1" for="entryAmount">จำนวนเงิน (บาท) <span class="text-danger">*</span></label>
+                <input class="form-control" type="number" id="entryAmount" min="0.01" max="10000000" step="0.01" placeholder="0.00" inputmode="decimal">
               </div>
-              <div class="col-lg-2">
-                <label class="form-label" for="entryAmount">จำนวนเงิน (บาท) <span class="text-danger">*</span></label>
-                <input class="form-control form-control-sm" type="number" id="entryAmount" min="0.01" max="10000000" step="0.01" placeholder="0.00">
+              <div class="col-12">
+                <label class="form-label mb-1">ประเภทรายการ</label>
+                <div class="d-flex gap-2" id="entryKindPicker">
+                  <button type="button" class="btn flex-fill kind-btn active" data-entry-kind="advance">เบิกล่วงหน้า</button>
+                  <button type="button" class="btn flex-fill kind-btn" data-entry-kind="payment">จ่ายเงิน</button>
+                </div>
               </div>
-              <div class="col-lg-3">
-                <label class="form-label" for="entryMethod">ช่องทาง</label>
-                <input class="form-control form-control-sm" id="entryMethod" list="methodOptions" maxlength="20" placeholder="เช่น เงินสด">
-                <datalist id="methodOptions"><option value="เงินสด"></option><option value="โอน"></option><option value="เช็ค"></option></datalist>
+              <div class="col-12">
+                <label class="form-label mb-1" for="entryMethod">ช่องทางรับเงิน</label>
+                <input class="form-control" id="entryMethod" list="methodOptions" maxlength="20" placeholder="เช่น เงินสด">
+                <datalist id="methodOptions"><option value="เงินสด"></option><option value="โอนธนาคาร"></option><option value="พร้อมเพย์"></option><option value="เช็ค"></option></datalist>
               </div>
-              <div class="col-lg-9">
-                <label class="form-label" for="entryNote">หมายเหตุ</label>
-                <input class="form-control form-control-sm" id="entryNote" maxlength="160" placeholder="เช่น เบิกค่าเดินทาง">
+              <div class="col-12">
+                <label class="form-label mb-1" for="entryNote">หมายเหตุ</label>
+                <input class="form-control" id="entryNote" maxlength="160" placeholder="เช่น เบิกล่วงหน้าครึ่งเดือน">
               </div>
-              <div class="col-lg-3 d-flex align-items-end">
-                <button class="btn btn-success w-100" id="entrySaveBtn"><i class="bi bi-plus-circle me-1"></i>บันทึกรายการ</button>
+              <div class="col-12">
+                <button class="btn btn-success w-100 py-2 fw-bold" id="entrySaveBtn"><i class="bi bi-plus-circle me-1"></i>บันทึกรายการ</button>
               </div>
             </div>
           </div>
@@ -2290,6 +2295,12 @@
 
     payrollEmployee.addEventListener('change', () => { loadPayroll(); loadOt(); loadClaims(); });
     payrollDepartment.addEventListener('change', () => { syncEmployeeOptions(); loadPayroll(); loadOt(); loadClaims(); });
+    entryKindPicker.addEventListener('click', event => {
+      const button = event.target.closest('button[data-entry-kind]');
+      if (!button) return;
+      entryKind.value = button.dataset.entryKind;
+      entryKindPicker.querySelectorAll('button').forEach(item => item.classList.toggle('active', item === button));
+    });
     entryKindFilter.addEventListener('change', loadEntryList);
     payrollCsvBtn.addEventListener('click', downloadPayrollCsv);
 
