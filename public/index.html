@@ -633,6 +633,19 @@
     </main>
   </div>
 
+  <div class="modal fade" id="photoModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title fs-5" id="photoModalTitle">รูปใบเสร็จ</h2>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="ปิด"></button>
+    </div>
+    <div class="modal-body text-center bg-body-secondary">
+      <img id="photoModalImg" alt="รูปใบเสร็จที่พนักงานแนบมา" class="rounded" style="max-width:100%;max-height:70vh;object-fit:contain">
+    </div>
+    <div class="modal-footer">
+      <a class="btn btn-outline-secondary" id="photoModalOpen" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1"></i>เปิดในแท็บใหม่</a>
+    </div>
+  </div></div></div>
+
   <div class="modal fade" id="employeeModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><form class="modal-content" id="employeeForm">
     <div class="modal-header">
       <div>
@@ -1019,6 +1032,7 @@
     const shiftModal = new bootstrap.Modal(document.querySelector('#shiftModal'));
     const typeModal = new bootstrap.Modal(document.querySelector('#typeModal'));
     const deptModal = new bootstrap.Modal(document.querySelector('#deptModal'));
+    const photoModal = new bootstrap.Modal(document.querySelector('#photoModal'));
     const siteModal = new bootstrap.Modal(document.querySelector('#siteModal'));
     let employeeList = [];
     let shiftList = [];
@@ -2053,7 +2067,8 @@
           <td class="text-nowrap"><span class="fw-semibold">${esc(row.employee_code)}</span> <span class="text-secondary">${esc(row.name)}</span>
             ${row.department_name ? `<div class="small text-secondary">${esc(row.department_name)}</div>` : ''}</td>
           <td class="text-nowrap">${esc(row.category)}</td>
-          <td class="small text-secondary">${esc(row.detail) || '-'}<div class="small">ส่งเมื่อ ${esc(row.created_at)}</div></td>
+          <td class="small text-secondary">${esc(row.detail) || '-'}<div class="small">ส่งเมื่อ ${esc(row.created_at)}</div>
+            ${row.has_photo ? `<button type="button" class="btn btn-link btn-sm p-0 mt-1 text-decoration-none" data-claim-photo><i class="bi bi-image me-1"></i>ดูใบเสร็จ</button>` : ''}</td>
           <td class="text-end fw-semibold">${baht(row.amount)}</td>
           <td><input class="form-control form-control-sm" type="number" min="0" step="0.01" data-claim-amount
                      value="${row.approved_amount !== null && row.approved_amount !== undefined ? row.approved_amount : row.amount}" style="width:7.5rem"></td>
@@ -2072,6 +2087,16 @@
     }
 
     claimTable.addEventListener('click', async event => {
+      const photoButton = event.target.closest('button[data-claim-photo]');
+      if (photoButton) {
+        const claimRow = photoButton.closest('tr[data-claim-id]');
+        const url = `/api/expenses/${claimRow.dataset.claimId}/photo`;
+        photoModalImg.src = url;
+        photoModalOpen.href = url;
+        photoModalTitle.textContent = `รูปใบเสร็จ · ${claimRow.children[1].textContent.trim()}`;
+        photoModal.show();
+        return;
+      }
       const button = event.target.closest('button[data-claim-approve], button[data-claim-reject], button[data-claim-reset]');
       if (!button) return;
       const row = button.closest('tr[data-claim-id]');

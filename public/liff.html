@@ -86,10 +86,31 @@
           <label class="form-label small mb-1" for="expenseDetail">รายละเอียด</label>
           <input class="form-control" id="expenseDetail" maxlength="200" placeholder="เช่น ค่าแท็กซี่ไปประชุม">
         </div>
+        <div class="mb-3">
+          <label class="form-label small mb-1" for="expensePhoto">รูปใบเสร็จ (ถ้ามี)</label>
+          <input class="form-control" type="file" id="expensePhoto" accept="image/*">
+          <div id="expensePhotoBox" class="d-none mt-2">
+            <img id="expensePhotoPreview" alt="ตัวอย่างรูปใบเสร็จที่จะส่ง" class="rounded border w-100" style="max-height:14rem;object-fit:contain;background:#f5f5f5">
+            <div class="d-flex align-items-center justify-content-between mt-1">
+              <small class="text-secondary" id="expensePhotoSize"></small>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="expensePhotoClearBtn">เอารูปออก</button>
+            </div>
+          </div>
+        </div>
         <button class="btn btn-success btn-lg w-100" id="expenseSubmitBtn"><i class="bi bi-send me-1"></i>ส่งรายการ</button>
         <div id="expenseFormMsg" class="small mt-2"></div>
       </div>
       <div class="card card-body" id="expenseListCard"></div>
+    </div>
+  </div>
+
+  <div id="photoViewer" class="d-none position-fixed top-0 start-0 w-100 h-100 d-flex flex-column"
+       style="background:rgba(0,0,0,.92);z-index:1080">
+    <div class="d-flex justify-content-end p-2">
+      <button type="button" class="btn btn-light btn-sm" id="photoViewerClose"><i class="bi bi-x-lg me-1"></i>ปิด</button>
+    </div>
+    <div class="flex-grow-1 d-flex align-items-center justify-content-center p-2 overflow-auto">
+      <img id="photoViewerImg" alt="รูปใบเสร็จ" style="max-width:100%;max-height:100%;object-fit:contain">
     </div>
   </div>
 
@@ -339,7 +360,8 @@
         ${rows.length ? rows.map(r => `<div class="row-line align-items-start">
           <span>${EXPENSE_STATUS[r.status] ?? ''} <span class="ms-1">${esc(r.category)}</span>
             <div class="small text-secondary">${esc(formatDay(r.claim_date))}${r.detail ? ' · ' + esc(r.detail) : ''}</div>
-            ${r.review_note ? `<div class="small text-danger">${esc(r.review_note)}</div>` : ''}</span>
+            ${r.review_note ? `<div class="small text-danger">${esc(r.review_note)}</div>` : ''}
+            ${r.has_photo ? `<div><button class="btn btn-sm btn-outline-secondary mt-1" data-view-photo="${esc(r.id)}"><i class="bi bi-image me-1"></i>ดูใบเสร็จ</button></div>` : ''}</span>
           <span class="text-end text-nowrap">
             <span class="fw-semibold">${baht(r.amount)}</span>
             ${r.status === 'approved' && r.approved_amount !== null && r.approved_amount !== r.amount
@@ -347,6 +369,91 @@
             ${r.status === 'pending' ? `<div><button class="btn btn-sm btn-outline-secondary mt-1" data-cancel-expense="${esc(r.id)}"><i class="bi bi-trash3"></i></button></div>` : ''}
           </span></div>`).join('')
         : '<div class="text-secondary text-center py-3">ยังไม่มีรายการในเดือนนี้</div>'}`;
+    }
+
+    let expensePhotoData = null;
+
+    function loadImage(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+        image.onerror = () => { URL.revokeObjectURL(url); reject(new Error('อ่านไฟล์รูปไม่ได้')); };
+        image.src = url;
+      });
+    }
+
+    // ย่อด้านยาวสุดเหลือ 1600 แล้วบีบเป็น JPEG ใบเสร็จอ่านออกสบายและไฟล์เล็กลงหลายเท่า
+    async function shrinkPhoto(file) {
+      const image = await loadImage(file);
+      const longest = Math.max(image.naturalWidth, image.naturalHeight) || 1;
+      const scale = Math.min(1, 1600 / longest);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('อุปกรณ์นี้ย่อรูปไม่ได้');
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg', 0.82);
+    }
+
+    function clearExpensePhoto() {
+      expensePhotoData = null;
+      $('expensePhoto').value = '';
+      $('expensePhotoBox').classList.add('d-none');
+      $('expensePhotoPreview').removeAttribute('src');
+      $('expensePhotoSize').textContent = '';
+    }
+
+    $('expensePhoto').addEventListener('change', async event => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) { clearExpensePhoto(); return; }
+      $('expenseFormMsg').textContent = '';
+      if (!/^image\//.test(file.type)) {
+        $('expenseFormMsg').innerHTML = '<span class="text-danger">แนบได้เฉพาะไฟล์รูปภาพ</span>';
+        clearExpensePhoto();
+        return;
+      }
+      try {
+        expensePhotoData = await shrinkPhoto(file);
+        const bytes = Math.round((expensePhotoData.length - expensePhotoData.indexOf(',') - 1) * 3 / 4);
+        $('expensePhotoPreview').src = expensePhotoData;
+        $('expensePhotoSize').textContent = `ขนาดหลังย่อ ${(bytes / 1024).toFixed(0)} KB`;
+        $('expensePhotoBox').classList.remove('d-none');
+      } catch (error) {
+        $('expenseFormMsg').innerHTML = `<span class="text-danger">${esc(error && error.message || 'ใช้รูปนี้ไม่ได้')}</span>`;
+        clearExpensePhoto();
+      }
+    });
+
+    $('expensePhotoClearBtn').addEventListener('click', clearExpensePhoto);
+
+    function closePhotoViewer() {
+      $('photoViewer').classList.add('d-none');
+      const current = $('photoViewerImg').getAttribute('src');
+      if (current && current.startsWith('blob:')) URL.revokeObjectURL(current);
+      $('photoViewerImg').removeAttribute('src');
+    }
+    $('photoViewerClose').addEventListener('click', closePhotoViewer);
+
+    async function openExpensePhoto(id, button) {
+      const label = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+      try {
+        const response = await fetch('/api/liff/expenses/photo', {
+          method:'POST', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ accessToken, id })
+        });
+        if (!response.ok) { alert('เปิดรูปไม่ได้'); return; }
+        $('photoViewerImg').src = URL.createObjectURL(await response.blob());
+        $('photoViewer').classList.remove('d-none');
+      } catch {
+        alert('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
+      } finally {
+        button.innerHTML = label;
+        button.disabled = false;
+      }
     }
 
     async function submitExpense() {
@@ -360,7 +467,7 @@
           method:'POST', headers:{ 'Content-Type':'application/json' },
           body: JSON.stringify({ accessToken, claimDate: $('expenseDate').value,
             category: $('expenseCategory').value, amount: Number($('expenseAmount').value || 0),
-            detail: $('expenseDetail').value })
+            detail: $('expenseDetail').value, photo: expensePhotoData })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -370,6 +477,7 @@
         $('expenseFormMsg').innerHTML = '<span class="text-success-emphasis">ส่งรายการแล้ว รอผู้ดูแลตรวจ</span>';
         $('expenseAmount').value = '';
         $('expenseDetail').value = '';
+        clearExpensePhoto();
         await loadSummary();
       } catch {
         $('expenseFormMsg').innerHTML = '<span class="text-danger">เชื่อมต่อเซิร์ฟเวอร์ไม่ได้</span>';
@@ -389,6 +497,8 @@
     }
     $('expenseSubmitBtn').addEventListener('click', submitExpense);
     $('expenseListCard').addEventListener('click', async event => {
+      const photoButton = event.target.closest('button[data-view-photo]');
+      if (photoButton) { await openExpensePhoto(photoButton.dataset.viewPhoto, photoButton); return; }
       const button = event.target.closest('button[data-cancel-expense]');
       if (!button) return;
       if (!confirm('ลบรายการนี้?')) return;

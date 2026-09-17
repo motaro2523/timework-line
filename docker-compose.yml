@@ -6,6 +6,8 @@ services:
       DATABASE_URL: postgresql://timework:${POSTGRES_PASSWORD}@db:5432/timework
     ports:
       - "3000:3000"
+    volumes:
+      - timework_uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -28,3 +30,4 @@ services:
 
 volumes:
   timework_postgres:
+  timework_uploads:

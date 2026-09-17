@@ -142,6 +142,9 @@ export async function initializeDatabase() {
       reviewed_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE expense_claims ADD COLUMN IF NOT EXISTS photo_file VARCHAR(80);
+    ALTER TABLE expense_claims ADD COLUMN IF NOT EXISTS photo_mime VARCHAR(30);
+    ALTER TABLE expense_claims ADD COLUMN IF NOT EXISTS photo_bytes INTEGER;
     CREATE INDEX IF NOT EXISTS expense_claims_lookup_idx ON expense_claims(employee_id, claim_date);
     CREATE INDEX IF NOT EXISTS expense_claims_status_idx ON expense_claims(status);
     -- พิกัดตอนลงเวลา เก็บได้ทั้งจาก LIFF และจากการแชร์ตำแหน่งใน LINE

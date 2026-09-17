@@ -3,6 +3,7 @@ import path from 'node:path';
 import Fastify, { type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { db, initializeDatabase } from './db.js';
+import { removeExpensePhoto, saveExpensePhoto, sendPhoto } from './photos.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -54,7 +55,8 @@ app.addHook('onRequest', async (request, reply) => {
   const PUBLIC_PATHS = ['/health', '/webhooks/line', '/liff', '/liff.html',
     '/liff/pay', '/liff/advance', '/liff/expense',
     '/api/liff/config', '/api/liff/status',
-    '/api/liff/check-in', '/api/liff/summary', '/api/liff/expenses', '/api/liff/expenses/cancel'];
+    '/api/liff/check-in', '/api/liff/summary', '/api/liff/expenses', '/api/liff/expenses/cancel',
+    '/api/liff/expenses/photo'];
   if (PUBLIC_PATHS.includes(pathname)) return;
   if (!adminKey) {
     request.log.error('ADMIN_API_KEY is not set, refusing admin requests');
@@ -696,7 +698,8 @@ app.post<{ Body: { accessToken?: string; month?: string } }>('/api/liff/summary'
   `, [me.id, from, to]);
   const expenses = await db.query(`
     SELECT id, to_char(claim_date, 'YYYY-MM-DD') AS claim_date, category, amount::float8 AS amount,
-           detail, status, approved_amount::float8 AS approved_amount, review_note
+           detail, status, approved_amount::float8 AS approved_amount, review_note,
+           (photo_file IS NOT NULL) AS has_photo
     FROM expense_claims
     WHERE employee_id = $1 AND claim_date BETWEEN $2::date AND $3::date
     ORDER BY claim_date DESC, id DESC
@@ -714,7 +717,8 @@ app.post<{ Body: { accessToken?: string; month?: string } }>('/api/liff/summary'
   };
 });
 
-app.post<{ Body: { accessToken?: string; claimDate?: string; category?: string; amount?: number | string; detail?: string } }>('/api/liff/expenses', async (request, reply) => {
+// bodyLimit สูงกว่าเส้นทางอื่นเพราะรูปถูกส่งมาเป็น base64 ซึ่งใหญ่กว่าไฟล์จริงราวหนึ่งในสาม
+app.post<{ Body: { accessToken?: string; claimDate?: string; category?: string; amount?: number | string; detail?: string; photo?: string } }>('/api/liff/expenses', { bodyLimit: 6 * 1024 * 1024 }, async (request, reply) => {
   const identity = await verifyLiffUser(String(request.body?.accessToken ?? '').trim());
   if (identity.error) return reply.code(identity.status).send({ error: identity.error });
   const employee = await db.query(
@@ -736,12 +740,38 @@ app.post<{ Body: { accessToken?: string; claimDate?: string; category?: string; 
     return reply.code(400).send({ error: 'จำนวนเงินต้องมากกว่า 0 และไม่เกิน 10,000,000' });
   }
   const detail = String(request.body?.detail ?? '').trim().slice(0, 200) || null;
-  const { rows } = await db.query(`
-    INSERT INTO expense_claims (employee_id, claim_date, category, amount, detail)
-    VALUES ($1, $2::date, $3, $4, $5)
-    RETURNING id, to_char(claim_date, 'YYYY-MM-DD') AS claim_date, category, amount::float8 AS amount, detail, status
-  `, [employee.rows[0].id, claimDate.value, category, Math.round(amount * 100) / 100, detail]);
-  return reply.code(201).send(rows[0]);
+  const photo = await saveExpensePhoto(request.body?.photo);
+  if (photo && 'error' in photo) return reply.code(400).send({ error: photo.error });
+  try {
+    const { rows } = await db.query(`
+      INSERT INTO expense_claims (employee_id, claim_date, category, amount, detail, photo_file, photo_mime, photo_bytes)
+      VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8)
+      RETURNING id, to_char(claim_date, 'YYYY-MM-DD') AS claim_date, category, amount::float8 AS amount, detail, status,
+                (photo_file IS NOT NULL) AS has_photo
+    `, [employee.rows[0].id, claimDate.value, category, Math.round(amount * 100) / 100, detail,
+        photo?.file ?? null, photo?.mime ?? null, photo?.bytes ?? null]);
+    return reply.code(201).send(rows[0]);
+  } catch (error) {
+    // บันทึกไม่สำเร็จก็ต้องไม่ทิ้งไฟล์ค้างไว้ในดิสก์
+    await removeExpensePhoto(photo?.file);
+    throw error;
+  }
+});
+
+// พนักงานดูได้เฉพาะรูปของรายการตัวเอง ใช้ POST เพราะต้องส่ง access token ของ LINE มาด้วย
+app.post<{ Body: { accessToken?: string; id?: string | number } }>('/api/liff/expenses/photo', async (request, reply) => {
+  const identity = await verifyLiffUser(String(request.body?.accessToken ?? '').trim());
+  if (identity.error) return reply.code(identity.status).send({ error: identity.error });
+  const employee = await db.query('SELECT id FROM employees WHERE line_user_id = $1 AND active = TRUE', [identity.userId]);
+  if (!employee.rowCount) return reply.code(404).send({ error: 'บัญชี LINE นี้ยังไม่ได้ผูกกับพนักงาน' });
+  const id = String(request.body?.id ?? '').trim();
+  if (!/^\d+$/.test(id)) return reply.code(400).send({ error: 'รหัสอ้างอิงรายการไม่ถูกต้อง' });
+  const { rows } = await db.query(
+    'SELECT photo_file, photo_mime FROM expense_claims WHERE id = $1 AND employee_id = $2',
+    [id, employee.rows[0].id]
+  );
+  if (!rows.length || !rows[0].photo_file) return reply.code(404).send({ error: 'ไม่พบรูปใบเสร็จ' });
+  return sendPhoto(reply, rows[0].photo_file, rows[0].photo_mime ?? 'image/jpeg');
 });
 
 // ลบได้เฉพาะรายการของตัวเองที่ยังไม่ถูกตรวจ
@@ -752,11 +782,12 @@ app.post<{ Body: { accessToken?: string; id?: string | number } }>('/api/liff/ex
   if (!employee.rowCount) return reply.code(404).send({ error: 'บัญชี LINE นี้ยังไม่ได้ผูกกับพนักงาน' });
   const id = String(request.body?.id ?? '').trim();
   if (!/^\d+$/.test(id)) return reply.code(400).send({ error: 'รหัสอ้างอิงรายการไม่ถูกต้อง' });
-  const { rowCount } = await db.query(
-    "DELETE FROM expense_claims WHERE id = $1 AND employee_id = $2 AND status = 'pending'",
+  const { rows } = await db.query(
+    "DELETE FROM expense_claims WHERE id = $1 AND employee_id = $2 AND status = 'pending' RETURNING photo_file",
     [id, employee.rows[0].id]
   );
-  if (!rowCount) return reply.code(400).send({ error: 'ลบได้เฉพาะรายการของตัวเองที่ยังรอตรวจอยู่' });
+  if (!rows.length) return reply.code(400).send({ error: 'ลบได้เฉพาะรายการของตัวเองที่ยังรอตรวจอยู่' });
+  await removeExpensePhoto(rows[0].photo_file);
   return reply.code(204).send();
 });
 
@@ -911,7 +942,8 @@ app.get<{ Querystring: { from?: string; to?: string; status?: string; employeeId
            c.category, c.amount::float8 AS amount, c.detail, c.status,
            c.approved_amount::float8 AS approved_amount, c.review_note,
            to_char(c.created_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI') AS created_at,
-           to_char(c.reviewed_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI') AS reviewed_at
+           to_char(c.reviewed_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI') AS reviewed_at,
+           (c.photo_file IS NOT NULL) AS has_photo
     FROM expense_claims c
     JOIN employees e ON e.id = c.employee_id
     LEFT JOIN departments d ON d.id = e.department_id
@@ -922,6 +954,13 @@ app.get<{ Querystring: { from?: string; to?: string; status?: string; employeeId
     ORDER BY c.claim_date DESC, c.id DESC
   `, [from.value, to.value, status, employeeFilter.value, departmentFilter.value]);
   return rows;
+});
+
+app.get<{ Params: { id: string } }>('/api/expenses/:id/photo', async (request, reply) => {
+  if (!/^\d+$/.test(request.params.id)) return reply.code(400).send({ error: 'รหัสอ้างอิงรายการไม่ถูกต้อง' });
+  const { rows } = await db.query('SELECT photo_file, photo_mime FROM expense_claims WHERE id = $1', [request.params.id]);
+  if (!rows.length || !rows[0].photo_file) return reply.code(404).send({ error: 'ไม่พบรูปใบเสร็จ' });
+  return sendPhoto(reply, rows[0].photo_file, rows[0].photo_mime ?? 'image/jpeg');
 });
 
 app.patch<{ Params: { id: string }; Body: { status?: string; approvedAmount?: number | string | null; reviewNote?: string } }>('/api/expenses/:id', async (request, reply) => {
