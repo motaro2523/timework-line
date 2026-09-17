@@ -6,6 +6,14 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <style>
+    .nav-group-label { font-size:11px; letter-spacing:.06em; color:rgba(255,255,255,.5); margin:10px 12px 4px; }
+    .status-pills { background:#f4f7fb; padding:4px; border-radius:10px; display:flex; flex-wrap:wrap; gap:6px; }
+    .status-pills button { border:0; background:transparent; color:#607d8b; font-size:.85rem; font-weight:600; padding:7px 12px; border-radius:8px; }
+    .status-pills button.active { background:#fff; color:#087e45; }
+    .stat-card { background:#fff; border-radius:16px; padding:16px 18px; box-shadow:0 .3rem 1rem rgba(29,47,64,.08); }
+    .stat-card .stat-label { font-size:13px; color:#607d8b; }
+    .stat-card .stat-value { font-size:24px; font-weight:700; }
+    .perm-row { border:1px solid #eceff1; border-radius:12px; padding:10px 12px; }
     body { background:#f4f7fb; color:#263238; }
     .sidebar { width:264px; min-height:100vh; background:linear-gradient(180deg,#075a35,#087e45); }
     .brand { font-weight:700; letter-spacing:.2px; }
@@ -32,8 +40,14 @@
         <a class="nav-link" href="#logs" data-page="logs"><i class="bi bi-calendar-check me-2"></i>บันทึกเวลา</a>
         <a class="nav-link" href="#missing" data-page="missing"><i class="bi bi-exclamation-triangle me-2"></i>ลืมลงเวลา</a>
         <a class="nav-link" href="#reports" data-page="reports"><i class="bi bi-file-earmark-bar-graph me-2"></i>รายงาน</a>
-        <a class="nav-link" href="#payroll" data-page="payroll"><i class="bi bi-cash-coin me-2"></i>ค่าจ้าง</a>
-        <a class="nav-link" href="#permissions" data-page="permissions"><i class="bi bi-shield-check me-2"></i>สิทธิ์การใช้งาน</a>
+        <div class="nav-group-label">การเงิน</div>
+        <a class="nav-link" href="#pay" data-page="pay"><i class="bi bi-cash-coin me-2"></i>เงินค่าตอบแทน</a>
+        <a class="nav-link" href="#advance" data-page="advance"><i class="bi bi-wallet2 me-2"></i>เงินที่เบิก</a>
+        <a class="nav-link d-flex align-items-center" href="#expenses" data-page="expenses">
+          <i class="bi bi-receipt me-2"></i><span>รายการค่าใช้จ่าย</span>
+          <span class="badge rounded-pill ms-auto d-none" id="pendingExpenseBadge"
+                style="background:#ffca28;color:#3e2723;font-size:.75rem;font-weight:700">0</span>
+        </a>
         <a class="nav-link" href="#settings" data-page="settings"><i class="bi bi-gear-fill me-2"></i>ตั้งค่า</a>
       </nav>
       <div class="mt-auto text-white-50 small px-2 pt-5"><i class="bi bi-person-circle me-1"></i>ผู้ดูแลระบบ</div>
@@ -46,7 +60,12 @@
           <p class="text-secondary mb-0" id="pageSubtitle">กำลังโหลดวันที่...</p>
           <small class="text-secondary" id="lastUpdated"></small>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 align-items-start">
+          <div class="d-none bg-white rounded-3 d-flex align-items-center gap-1 p-1 shadow-sm" id="monthPicker">
+            <button class="btn btn-sm btn-outline-secondary" id="monthPrevBtn" aria-label="เดือนก่อนหน้า"><i class="bi bi-chevron-left"></i></button>
+            <span class="fw-semibold text-center px-2" id="monthLabel" style="min-width:8.5rem"></span>
+            <button class="btn btn-sm btn-outline-secondary" id="monthNextBtn" aria-label="เดือนถัดไป"><i class="bi bi-chevron-right"></i></button>
+          </div>
           <button class="btn btn-outline-secondary" id="refreshBtn"><i class="bi bi-arrow-clockwise"></i><span class="d-none d-sm-inline ms-1">รีเฟรช</span></button>
           <button class="btn btn-success" id="addEmployeeBtn"><i class="bi bi-person-plus-fill me-1"></i>เพิ่มพนักงาน</button>
           <button class="btn btn-success d-none" id="addShiftBtn"><i class="bi bi-plus-circle me-1"></i>เพิ่มกะ</button>
@@ -398,8 +417,45 @@
       </div>
 
       <!-- หน้า ค่าจ้าง -->
-      <div id="view-payroll" class="d-none">
-        <section class="table-card card mb-4">
+      <!-- หน้า เงินค่าตอบแทน -->
+      <div id="view-pay" class="d-none">
+        <input type="hidden" id="payrollFrom"><input type="hidden" id="payrollTo">
+        <div class="row g-3 mb-4">
+          <div class="col-6 col-xl-3"><div class="stat-card"><div class="stat-label">ค่าแรงรวม</div><div class="stat-value" style="color:#263238" id="payStatWage">0.00</div></div></div>
+          <div class="col-6 col-xl-3"><div class="stat-card"><div class="stat-label">ค่า OT ที่อนุมัติ</div><div class="stat-value" style="color:#0277bd" id="payStatOt">0.00</div></div></div>
+          <div class="col-6 col-xl-3"><div class="stat-card"><div class="stat-label">หักสาย/ขาดงาน</div><div class="stat-value" style="color:#c62828" id="payStatDeduct">0.00</div></div></div>
+          <div class="col-6 col-xl-3"><div class="stat-card"><div class="stat-label">คงเหลือรอจ่าย</div><div class="stat-value" style="color:#087e45" id="payStatBalance">0.00</div></div></div>
+        </div>
+<section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+              <div>
+                <h2 class="h5 fw-bold mb-0">ค่าตอบแทนรายคน</h2>
+                <div class="text-secondary small">ค่าแรง + OT ที่อนุมัติ − หักสาย/ขาดงาน + ค่าใช้จ่ายที่อนุมัติ</div>
+                <small class="text-secondary" id="payrollSummary">กำลังโหลดข้อมูล...</small>
+              </div>
+              <div class="d-flex flex-wrap gap-2 align-items-center">
+                <select class="form-select form-select-sm" id="payrollDepartment" style="width:12rem"></select>
+                <select class="form-select form-select-sm" id="payrollEmployee" style="width:13rem"></select>
+                <button class="btn btn-success btn-sm" id="payrollCsvBtn"><i class="bi bi-download me-1"></i>ส่งออก Excel</button>
+              </div>
+            </div>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0" style="font-size:.92rem">
+            <thead class="table-light"><tr>
+              <th class="ps-4">พนักงาน</th><th>ประเภท</th>
+              <th class="text-end">ทำงาน</th><th class="text-end">ขาด</th><th class="text-end">ลา</th>
+              <th class="text-end">ค่าแรง</th><th class="text-end">OT</th><th class="text-end">หัก</th><th class="text-end">ค่าใช้จ่ายอนุมัติ</th>
+              <th class="text-end">ยอดสุทธิ</th><th class="text-end">เบิก</th><th class="text-end">จ่ายแล้ว</th>
+              <th class="text-end pe-4">คงเหลือ</th>
+            </tr></thead>
+            <tbody id="payrollTable"><tr><td colspan="13" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+            <tfoot id="payrollFoot"></tfoot>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>รายวันจ่ายตามจำนวนวันที่มาทำงาน รายเดือนจ่ายเต็มเดือนแล้วหักวันขาดงานตามฐานวันต่อเดือน OT คิดจากค่าแรงต่อชั่วโมงคูณอัตรา OT ของประเภท ชี้เมาส์ที่ตัวเลขเพื่อดูที่มาของยอด แก้กฎได้ที่หน้าตั้งค่า</small></div>
+        </section>
+
+<section class="table-card card mb-4">
           <div class="card-header bg-white border-0 pt-4 px-4">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
               <div>
@@ -421,66 +477,36 @@
           </table></div></div>
           <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>OT คิดจากเวลาที่สแกนออกหลังเวลาเลิกกะ แต่<strong>จะไม่จ่ายเงินจนกว่าจะกดอนุมัติ</strong> · <i class="bi bi-check2"></i> อนุมัติ (แก้ช่องนาทีให้น้อยลงเพื่ออนุมัติบางส่วน) · <i class="bi bi-x-lg"></i> <strong>ไม่อนุมัติ</strong> บันทึกว่าตรวจแล้วและไม่จ่าย พร้อมเหตุผลในช่องหมายเหตุ · <i class="bi bi-arrow-counterclockwise"></i> ล้างการตัดสินใจกลับเป็นรออนุมัติ · ปุ่ม อนุมัติทั้งหมด จะข้ามรายการที่ตัดสินใจไปแล้วทั้งอนุมัติและไม่อนุมัติ</small></div>
         </section>
+      </div>
 
-        <section class="table-card card mb-4">
+      <!-- หน้า เงินที่เบิก -->
+      <div id="view-advance" class="d-none">
+        <div class="row g-3 mb-4">
+          <div class="col-6 col-xl-4"><div class="stat-card"><div class="stat-label">เบิกล่วงหน้าเดือนนี้</div><div class="stat-value" style="color:#ef6c00" id="advStatAdvance">0.00</div></div></div>
+          <div class="col-6 col-xl-4"><div class="stat-card"><div class="stat-label">จ่ายเงินแล้ว</div><div class="stat-value" style="color:#087e45" id="advStatPayment">0.00</div></div></div>
+          <div class="col-12 col-xl-4"><div class="stat-card"><div class="stat-label">จำนวนรายการ</div><div class="stat-value" style="color:#263238" id="advStatCount">0 รายการ</div></div></div>
+        </div>
+        <div class="row g-4 align-items-start">
+          <div class="col-xl-7"><section class="table-card card">
           <div class="card-header bg-white border-0 pt-4 px-4">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
               <div>
-                <h2 class="h5 fw-bold mb-0">รายการค่าใช้จ่ายที่พนักงานส่งมา</h2>
-                <small class="text-secondary" id="claimSummary">กำลังโหลดข้อมูล...</small>
+                <h2 class="h5 fw-bold mb-0">รายการเบิกและจ่ายเงิน</h2>
+                <small class="text-secondary" id="entryListSummary">กำลังโหลดข้อมูล...</small>
               </div>
-              <select class="form-select form-select-sm" id="claimStatusFilter" style="width:12rem">
-                <option value="">ทุกสถานะ</option>
-                <option value="pending">เฉพาะรอตรวจ</option>
-                <option value="approved">เฉพาะอนุมัติแล้ว</option>
-                <option value="rejected">เฉพาะไม่อนุมัติ</option>
+              <select class="form-select form-select-sm" id="entryKindFilter" style="width:12rem">
+                <option value="">ทั้งเบิกและจ่าย</option>
+                <option value="advance">เฉพาะเบิกล่วงหน้า</option>
+                <option value="payment">เฉพาะจ่ายเงิน</option>
               </select>
             </div>
           </div>
-          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0" style="font-size:.92rem">
-            <thead class="table-light"><tr>
-              <th class="ps-4">วันที่</th><th>พนักงาน</th><th>ประเภท</th><th>รายละเอียด</th>
-              <th class="text-end">ยอดที่ขอ</th><th>อนุมัติ (บาท)</th><th>หมายเหตุผู้ตรวจ</th><th>สถานะ</th><th class="pe-4"></th>
-            </tr></thead>
-            <tbody id="claimTable"><tr><td colspan="9" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th class="ps-4">วันที่</th><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>ประเภท</th><th class="text-end">จำนวนเงิน</th><th>ช่องทาง</th><th>หมายเหตุ</th><th class="pe-4"></th></tr></thead>
+            <tbody id="entryTable"><tr><td colspan="8" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
           </table></div></div>
-          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>พนักงานส่งรายการเข้ามาจากหน้า LINE ได้เฉพาะคนที่เปิดสิทธิ์ไว้ที่หน้า พนักงาน · <i class="bi bi-check2"></i> อนุมัติตามยอดในช่อง (แก้ให้น้อยลงได้) · <i class="bi bi-x-lg"></i> ไม่อนุมัติ พร้อมเหตุผลในช่องหมายเหตุ พนักงานจะเห็นเหตุผลในหน้าของตัวเอง · ยอดที่อนุมัติยังไม่ถูกนำไปรวมกับค่าจ้างอัตโนมัติ ถ้าจะจ่ายคืนให้บันทึกเป็นรายการจ่ายเงินด้านล่าง</small></div>
-        </section>
-
-        <section class="table-card card mb-4">
-          <div class="card-header bg-white border-0 pt-4 px-4">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-              <div>
-                <h2 class="h5 fw-bold mb-0">คำนวณค่าจ้าง</h2>
-                <small class="text-secondary" id="payrollSummary">กำลังโหลดข้อมูล...</small>
-              </div>
-              <div class="d-flex flex-wrap gap-2 align-items-center">
-                <button class="btn btn-outline-secondary btn-sm" id="payrollThisMonth">เดือนนี้</button>
-                <button class="btn btn-outline-secondary btn-sm" id="payrollLastMonth">เดือนที่แล้ว</button>
-                <input class="form-control form-control-sm" type="date" id="payrollFrom" style="width:9.5rem">
-                <span class="text-secondary small">ถึง</span>
-                <input class="form-control form-control-sm" type="date" id="payrollTo" style="width:9.5rem">
-                <select class="form-select form-select-sm" id="payrollDepartment" style="width:12rem"></select>
-                <select class="form-select form-select-sm" id="payrollEmployee" style="width:13rem"></select>
-                <button class="btn btn-success btn-sm" id="payrollCsvBtn"><i class="bi bi-download me-1"></i>CSV</button>
-              </div>
-            </div>
-          </div>
-          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0" style="font-size:.92rem">
-            <thead class="table-light"><tr>
-              <th class="ps-4">พนักงาน</th><th>ประเภท</th>
-              <th class="text-end">ทำงาน</th><th class="text-end">ขาด</th><th class="text-end">ลา</th>
-              <th class="text-end">ค่าแรง</th><th class="text-end">OT</th><th class="text-end">หัก</th>
-              <th class="text-end">ยอดสุทธิ</th><th class="text-end">เบิก</th><th class="text-end">จ่ายแล้ว</th>
-              <th class="text-end pe-4">คงเหลือ</th>
-            </tr></thead>
-            <tbody id="payrollTable"><tr><td colspan="12" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
-            <tfoot id="payrollFoot"></tfoot>
-          </table></div></div>
-          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>รายวันจ่ายตามจำนวนวันที่มาทำงาน รายเดือนจ่ายเต็มเดือนแล้วหักวันขาดงานตามฐานวันต่อเดือน OT คิดจากค่าแรงต่อชั่วโมงคูณอัตรา OT ของประเภท ชี้เมาส์ที่ตัวเลขเพื่อดูที่มาของยอด แก้กฎได้ที่หน้าตั้งค่า</small></div>
-        </section>
-
-        <section class="table-card card mb-4">
+        </section></div>
+          <div class="col-xl-5"><section class="table-card card mb-4">
           <div class="card-header bg-white border-0 pt-4 px-4">
             <h2 class="h5 fw-bold mb-0">บันทึกการเบิกและการจ่ายเงิน</h2>
             <small class="text-secondary" id="entryFormSummary">เลือกพนักงาน วันที่ ประเภทรายการ และจำนวนเงิน</small>
@@ -521,67 +547,58 @@
             </div>
           </div>
           <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>เบิกล่วงหน้าและจ่ายเงินจะถูกหักออกจากยอดสุทธิของช่วงที่วันที่รายการอยู่ในนั้น ทำให้ช่อง คงเหลือ บอกว่ายังต้องจ่ายอีกเท่าไร</small></div>
-        </section>
-
-        <section class="table-card card">
-          <div class="card-header bg-white border-0 pt-4 px-4">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-              <div>
-                <h2 class="h5 fw-bold mb-0">รายการเบิกและจ่ายเงิน</h2>
-                <small class="text-secondary" id="entryListSummary">กำลังโหลดข้อมูล...</small>
-              </div>
-              <select class="form-select form-select-sm" id="entryKindFilter" style="width:12rem">
-                <option value="">ทั้งเบิกและจ่าย</option>
-                <option value="advance">เฉพาะเบิกล่วงหน้า</option>
-                <option value="payment">เฉพาะจ่ายเงิน</option>
-              </select>
-            </div>
-          </div>
-          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
-            <thead class="table-light"><tr><th class="ps-4">วันที่</th><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>ประเภท</th><th class="text-end">จำนวนเงิน</th><th>ช่องทาง</th><th>หมายเหตุ</th><th class="pe-4"></th></tr></thead>
-            <tbody id="entryTable"><tr><td colspan="8" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
-          </table></div></div>
-        </section>
+        </section></div>
+        </div>
       </div>
 
-      <!-- หน้า สิทธิ์การใช้งาน -->
-      <div id="view-permissions" class="d-none">
-        <section class="table-card card mb-4">
+      <!-- หน้า รายการค่าใช้จ่าย -->
+      <div id="view-expenses" class="d-none">
+        <div class="row g-4 align-items-start">
+          <div class="col-xl-7"><section class="table-card card mb-4">
           <div class="card-header bg-white border-0 pt-4 px-4">
-            <h2 class="h5 fw-bold mb-0">สิทธิ์ส่งรายการค่าใช้จ่ายผ่าน LINE</h2>
-            <small class="text-secondary" id="permSummary">กำลังโหลดข้อมูล...</small>
-            <div class="row g-2 mt-3">
-              <div class="col-md-4">
-                <label class="form-label small text-secondary mb-1">แผนก / กลุ่ม</label>
-                <select class="form-select form-select-sm" id="permDepartment"><option value="">ทุกแผนก</option></select>
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+              <div>
+                <h2 class="h5 fw-bold mb-0">รายการค่าใช้จ่ายที่พนักงานส่งมา</h2>
+                <div class="text-secondary small">อนุมัติชั้นเดียว · แก้ยอดอนุมัติได้ก่อนกดอนุมัติ</div>
+                <small class="text-secondary" id="claimSummary">กำลังโหลดข้อมูล...</small>
               </div>
-              <div class="col-md-4">
-                <label class="form-label small text-secondary mb-1">ค้นหาชื่อหรือรหัส</label>
-                <input class="form-control form-control-sm" id="permSearch" placeholder="เช่น E002 หรือชื่อพนักงาน" autocomplete="off">
-              </div>
-              <div class="col-md-4 d-flex align-items-end gap-2">
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="permCheckAllBtn">เลือกทุกคนที่เห็น</button>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="permClearAllBtn">ล้างทุกคนที่เห็น</button>
+              <div class="status-pills" id="claimStatusPills">
+                <button type="button" data-claim-status="pending" class="active">รอตรวจ</button>
+                <button type="button" data-claim-status="approved">อนุมัติแล้ว</button>
+                <button type="button" data-claim-status="rejected">ไม่อนุมัติ</button>
+                <button type="button" data-claim-status="">ทั้งหมด</button>
               </div>
             </div>
           </div>
-          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
-            <thead class="table-light"><tr>
-              <th class="ps-4">รหัส</th><th>ชื่อพนักงาน</th><th>แผนก</th><th>บัญชี LINE</th>
-              <th class="text-center">ส่งรายการค่าใช้จ่ายได้</th>
-            </tr></thead>
-            <tbody id="permTable"><tr><td colspan="5" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
-          </table></div></div>
-          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0 d-flex flex-wrap align-items-center gap-3">
-            <button type="button" class="btn btn-success" id="permSaveBtn" disabled><i class="bi bi-check2 me-1"></i>บันทึกสิทธิ์</button>
-            <button type="button" class="btn btn-outline-secondary" id="permResetBtn" disabled>ยกเลิกที่แก้ไว้</button>
-            <small class="text-secondary" id="permDirty"></small>
+            <div class="row g-3 mt-1">
+              <div class="col-sm-4"><div class="stat-card"><div class="stat-label">รอตรวจ</div><div class="stat-value" style="color:#ef6c00" id="claimStatPending">0.00</div></div></div>
+              <div class="col-sm-4"><div class="stat-card"><div class="stat-label">อนุมัติแล้ว</div><div class="stat-value" style="color:#087e45" id="claimStatApproved">0.00</div></div></div>
+              <div class="col-sm-4"><div class="stat-card"><div class="stat-label">ไม่อนุมัติ</div><div class="stat-value" style="color:#c62828" id="claimStatRejected">0.00</div></div></div>
+            </div>
           </div>
-        </section>
-        <div class="alert alert-light border small text-secondary">
-          <i class="bi bi-info-circle me-1"></i>ค่าเริ่มต้นคือปิดทุกคน คนที่ยังไม่ได้เปิดสิทธิ์จะเปิดหน้าค่าใช้จ่ายใน LINE ไม่ได้ และจะเห็นข้อความให้มาแจ้งผู้ดูแล
-          · เปลี่ยนแล้วต้องกด บันทึกสิทธิ์ ถึงจะมีผล · คนที่ยังไม่ผูกบัญชี LINE ต่อให้เปิดสิทธิ์ก็ยังใช้เมนูไม่ได้จนกว่าจะผูกบัญชีก่อน
-          · ลิงก์หน้าค่าใช้จ่ายสำหรับริชเมนูคือ <code>https://liff.line.me/2011494585-rYOQzGC5/expense</code>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0" style="font-size:.92rem">
+            <thead class="table-light"><tr>
+              <th class="ps-4">วันที่</th><th>พนักงาน</th><th>ประเภท</th><th>รายละเอียด</th>
+              <th class="text-end">ยอดที่ขอ</th><th>อนุมัติ (บาท)</th><th>หมายเหตุผู้ตรวจ</th><th>สถานะ</th><th class="pe-4"></th>
+            </tr></thead>
+            <tbody id="claimTable"><tr><td colspan="9" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>พนักงานส่งรายการเข้ามาจากหน้า LINE ได้เฉพาะคนที่เปิดสิทธิ์ไว้ในการ์ดด้านขวา · <i class="bi bi-check2"></i> อนุมัติตามยอดในช่อง (แก้ให้น้อยลงได้) · <i class="bi bi-x-lg"></i> ไม่อนุมัติ พร้อมเหตุผลในช่องหมายเหตุ พนักงานจะเห็นเหตุผลในหน้าของตัวเอง · <strong>ยอดที่อนุมัติจะไปรวมในยอดสุทธิของหน้า เงินค่าตอบแทน เดือนเดียวกันอัตโนมัติ</strong> ตอนจ่ายคืนจริงให้บันทึกเป็นรายการจ่ายเงินในหน้า เงินที่เบิก ระบบจะหักกลบให้เอง</small></div>
+        </section></div>
+          <div class="col-xl-5">
+            <section class="table-card card mb-4">
+              <div class="card-header bg-white border-0 pt-4 px-4">
+                <h2 class="h5 fw-bold mb-0">สิทธิ์ส่งรายการผ่าน LINE</h2>
+                <small class="text-secondary" id="permSummary">เปิดให้เฉพาะคนที่กำหนด ค่าเริ่มต้นปิดทุกคน</small>
+              </div>
+              <div class="card-body px-4 pb-3">
+                <div class="d-flex flex-column gap-2" id="permList">
+                  <div class="text-secondary text-center py-3">กำลังโหลดข้อมูล...</div>
+                </div>
+              </div>
+              <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>กดปุ่มขวามือเพื่อเปิดหรือปิดสิทธิ์ มีผลทันที · คนที่ยังไม่ผูกบัญชี LINE ต่อให้เปิดสิทธิ์ก็ยังใช้เมนูไม่ได้ · ลิงก์สำหรับริชเมนู <code>liff.line.me/2011494585-rYOQzGC5/expense</code></small></div>
+            </section>
+          </div>
         </div>
       </div>
 
@@ -967,12 +984,44 @@
       logs:      { title:'บันทึกเวลา',    subtitle:'รายการลงเวลาเข้าและออกงานของวันนี้',          action:'none'     },
       missing:   { title:'ลืมลงเวลา',     subtitle:'หาวันที่ลืมสแกน แล้วเติมเวลาย้อนหลังให้ถูกต้อง',  action:'none'     },
       reports:   { title:'รายงาน',       subtitle:'สรุปเวลาทำงาน สาย OT และการลา คิดตามกะ',      action:'none'     },
-      payroll:   { title:'ค่าจ้าง',       subtitle:'คำนวณค่าจ้าง บันทึกการเบิกและการจ่ายเงิน',      action:'none'     },
-      permissions: { title:'สิทธิ์การใช้งาน', subtitle:'เลือกว่าพนักงานคนไหนใช้เมนูไหนใน LINE ได้',   action:'none'     },
+      pay:       { title:'เงินค่าตอบแทน',  subtitle:'ค่าแรง OT และยอดคงเหลือรอจ่ายของพนักงานทุกคน',  action:'none'     },
+      advance:   { title:'เงินที่เบิก',     subtitle:'บันทึกเงินเบิกล่วงหน้าและการจ่ายเงินให้พนักงาน',   action:'none'     },
+      expenses:  { title:'รายการเงินค่าใช้จ่าย', subtitle:'ตรวจและอนุมัติรายการที่พนักงานส่งเข้ามาผ่าน LINE', action:'none' },
       settings:  { title:'ตั้งค่า',        subtitle:'แผนก ประเภทพนักงาน และวิธีจ่ายค่าตอบแทน',      action:'settings' }
     };
 
     let activePage = 'overview';
+
+    // 3 หน้าการเงินใช้เดือนเดียวกัน เปลี่ยนที่หัวหน้าเว็บแล้วมีผลทุกหน้า
+    // ตั้งค่าตอน applyFinanceMonth() ไม่ใช่ตรงนี้ เพราะ bangkokToday ถูกประกาศทีหลังในไฟล์
+    let financeMonth = '';
+
+    function monthBounds(month) {
+      const [year, index] = month.split('-').map(Number);
+      const last = new Date(Date.UTC(year, index, 0)).getUTCDate();
+      return [`${month}-01`, `${month}-${String(last).padStart(2,'0')}`];
+    }
+    function shiftFinanceMonth(step) {
+      if (!financeMonth) financeMonth = bangkokToday().slice(0, 7);
+      const [year, index] = financeMonth.split('-').map(Number);
+      const date = new Date(Date.UTC(year, index - 1 + step, 1));
+      financeMonth = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2,'0')}`;
+      applyFinanceMonth();
+      reloadFinancePage();
+    }
+    function applyFinanceMonth() {
+      if (!financeMonth) financeMonth = bangkokToday().slice(0, 7);
+      const [from, to] = monthBounds(financeMonth);
+      payrollFrom.value = from;
+      payrollTo.value = to;
+      monthLabel.textContent = new Intl.DateTimeFormat('th-TH',{ year:'numeric', month:'long', timeZone:'Asia/Bangkok' })
+        .format(new Date(`${from}T00:00:00Z`));
+    }
+    function reloadFinancePage() {
+      Promise.all((PAGE_LOADERS[activePage] ?? (() => []))()).catch(() => {});
+    }
+    monthPrevBtn.addEventListener('click', () => shiftFinanceMonth(-1));
+    monthNextBtn.addEventListener('click', () => shiftFinanceMonth(1));
 
     function route() {
       const requested = location.hash.replace('#','');
@@ -987,6 +1036,7 @@
       addTypeBtn.classList.toggle('d-none', PAGES[page].action !== 'settings');
       addDeptBtn.classList.toggle('d-none', PAGES[page].action !== 'settings');
       addSiteBtn.classList.toggle('d-none', PAGES[page].action !== 'settings');
+      monthPicker.classList.toggle('d-none', !FINANCE_PAGES.includes(page));
       window.scrollTo(0,0);
     }
 
@@ -1935,111 +1985,63 @@
       }
     });
 
-    // ===== สิทธิ์การใช้งาน =====
-    // เก็บเฉพาะคนที่ผู้ดูแลแก้ค่าไว้แต่ยังไม่บันทึก เพื่อไม่ให้การรีเฟรชข้อมูลกลางทับสิ่งที่กำลังแก้
-    const permDraft = new Map();
-
-    const permVisible = () => {
-      const keyword = permSearch.value.trim().toLowerCase();
-      return employeesInDepartment(permDepartment.value)
-        .filter(employee => employee.active)
-        .filter(employee => !keyword
-          || employee.name.toLowerCase().includes(keyword)
-          || String(employee.employee_code).toLowerCase().includes(keyword));
-    };
-    const permValue = employee => permDraft.has(String(employee.id))
-      ? permDraft.get(String(employee.id))
-      : Boolean(employee.can_submit_expense);
-
-    function renderPermissions() {
-      const rows = permVisible();
-      const allowed = employeeList.filter(employee => employee.active && permValue(employee)).length;
-      const activeCount = employeeList.filter(employee => employee.active).length;
-      setSummary(permSummary, `เปิดสิทธิ์อยู่ ${allowed} คน จากพนักงานที่ใช้งาน ${activeCount} คน`
-        + (rows.length === activeCount ? '' : ` · แสดงอยู่ ${rows.length} คนตามตัวกรอง`));
-      permTable.innerHTML = rows.length ? rows.map(employee => {
-        const on = permValue(employee);
-        const edited = permDraft.has(String(employee.id));
-        return `<tr data-perm-id="${esc(employee.id)}"${edited ? ' class="table-warning"' : ''}>
-          <td class="ps-4 fw-semibold text-nowrap">${esc(employee.employee_code)}</td>
-          <td>${esc(employee.name)}</td>
-          <td class="text-secondary">${employee.department_name ? esc(employee.department_name) : dash}</td>
-          <td>${lineBadge(Boolean(employee.line_user_id))}</td>
-          <td class="text-center">
-            <div class="form-check form-switch d-inline-block m-0">
-              <input class="form-check-input" type="checkbox" data-perm-toggle${on ? ' checked' : ''}
-                     aria-label="ให้ ${esc(employee.name)} ส่งรายการค่าใช้จ่ายได้">
-            </div>
-          </td>
-        </tr>`;
-      }).join('') : emptyRow(5, employeeList.some(employee => employee.active)
-        ? 'ไม่มีพนักงานที่ตรงกับตัวกรอง'
-        : 'ยังไม่มีพนักงานที่ใช้งานอยู่');
-      permSaveBtn.disabled = permDraft.size === 0;
-      permResetBtn.disabled = permDraft.size === 0;
-      permDirty.textContent = permDraft.size ? `แก้ไว้ ${permDraft.size} คน ยังไม่ได้บันทึก` : '';
-      permDirty.classList.toggle('text-warning-emphasis', permDraft.size > 0);
+    // ===== สิทธิ์ส่งรายการค่าใช้จ่าย =====
+    // การ์ดนี้อยู่ข้างรายการค่าใช้จ่าย กดแล้วมีผลทันที ไม่มีปุ่มบันทึกแยก
+    function loadPermissions() {
+      const rows = employeeList.filter(employee => employee.active);
+      const allowed = rows.filter(employee => employee.can_submit_expense).length;
+      setSummary(permSummary, `เปิดสิทธิ์อยู่ ${allowed} คน จากพนักงานที่ใช้งาน ${rows.length} คน · ค่าเริ่มต้นปิดทุกคน`);
+      permList.innerHTML = rows.length ? rows.map(employee => {
+        const on = Boolean(employee.can_submit_expense);
+        return `<div class="perm-row d-flex align-items-center justify-content-between gap-2" data-perm-id="${esc(employee.id)}">
+          <div class="min-w-0">
+            <div class="fw-semibold text-truncate">${esc(employee.name)}</div>
+            <div class="small text-secondary">${esc(employee.employee_code)}${employee.department_name ? ' · ' + esc(employee.department_name) : ''}</div>
+            ${employee.line_user_id ? '' : '<div class="small text-warning-emphasis"><i class="bi bi-exclamation-circle me-1"></i>ยังไม่ผูกบัญชี LINE</div>'}
+          </div>
+          <button type="button" class="btn btn-sm rounded-pill fw-bold flex-shrink-0 ${on ? 'btn-success' : 'btn-light border'}"
+                  data-perm-toggle style="min-width:5.5rem">${on ? 'ส่งได้' : 'ปิดอยู่'}</button>
+        </div>`;
+      }).join('') : '<div class="text-secondary text-center py-3">ยังไม่มีพนักงานที่ใช้งานอยู่</div>';
     }
 
-    async function loadPermissions() {
-      permDepartment.innerHTML = ['<option value="">ทุกแผนก</option>']
-        .concat(deptList.map(d => `<option value="${esc(d.id)}"${String(permDepartment.value) === String(d.id) ? ' selected' : ''}>${esc(d.name)}</option>`)).join('');
-      renderPermissions();
-    }
-
-    permDepartment.addEventListener('change', renderPermissions);
-    permSearch.addEventListener('input', renderPermissions);
-
-    permTable.addEventListener('change', event => {
-      const toggle = event.target.closest('[data-perm-toggle]');
-      if (!toggle) return;
-      const id = event.target.closest('[data-perm-id]').dataset.permId;
+    permList.addEventListener('click', async event => {
+      const button = event.target.closest('button[data-perm-toggle]');
+      if (!button) return;
+      const id = button.closest('[data-perm-id]').dataset.permId;
       const employee = employeeList.find(item => String(item.id) === id);
       if (!employee) return;
-      // กลับไปเท่าค่าเดิมแล้วก็ไม่ต้องนับเป็นการแก้ไข
-      if (toggle.checked === Boolean(employee.can_submit_expense)) permDraft.delete(id);
-      else permDraft.set(id, toggle.checked);
-      renderPermissions();
-    });
-
-    const permSetVisible = value => {
-      for (const employee of permVisible()) {
-        const id = String(employee.id);
-        if (value === Boolean(employee.can_submit_expense)) permDraft.delete(id);
-        else permDraft.set(id, value);
-      }
-      renderPermissions();
-    };
-    permCheckAllBtn.addEventListener('click', () => permSetVisible(true));
-    permClearAllBtn.addEventListener('click', () => permSetVisible(false));
-    permResetBtn.addEventListener('click', () => { permDraft.clear(); renderPermissions(); });
-
-    permSaveBtn.addEventListener('click', async () => {
-      if (!permDraft.size) return;
-      const grant = [];
-      const revoke = [];
-      for (const [id, value] of permDraft) (value ? grant : revoke).push(Number(id));
-      const label = permSaveBtn.innerHTML;
-      permSaveBtn.disabled = true;
-      permSaveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังบันทึก';
+      const next = !employee.can_submit_expense;
+      const label = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
       try {
-        const response = await fetch('/api/permissions/expense', {
-          method:'POST', headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify({ grant, revoke })
+        const response = await fetch(`/api/employees/${id}`, {
+          method:'PATCH', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ canSubmitExpense: next })
         });
         const result = await response.json().catch(() => ({}));
-        if (!response.ok) { setSummary(permSummary, result.error ?? 'บันทึกสิทธิ์ไม่สำเร็จ', true); return; }
-        permDraft.clear();
-        await loadDashboard();
-        renderPermissions();
-        setSummary(permSummary, `บันทึกแล้ว เปิดสิทธิ์เพิ่ม ${result.granted} คน ถอนสิทธิ์ ${result.revoked} คน`);
+        if (!response.ok) { setSummary(permSummary, result.error ?? 'เปลี่ยนสิทธิ์ไม่สำเร็จ', true); return; }
+        employee.can_submit_expense = next;
+        loadPermissions();
       } catch {
         setSummary(permSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
       } finally {
-        permSaveBtn.innerHTML = label;
-        permSaveBtn.disabled = permDraft.size === 0;
+        if (button.isConnected) { button.innerHTML = label; button.disabled = false; }
       }
     });
+
+    // ตัวเลขบนเมนู นับรายการที่ยังรอตรวจทั้งเดือน ไม่ขึ้นกับตัวกรองที่เลือกอยู่
+    async function refreshPendingExpenseBadge() {
+      try {
+        const rows = await fetch(`/api/expenses?from=${payrollFrom.value}&to=${payrollTo.value}&status=pending`).then(r => r.json());
+        const count = Array.isArray(rows) ? rows.length : 0;
+        pendingExpenseBadge.textContent = count;
+        pendingExpenseBadge.classList.toggle('d-none', count === 0);
+      } catch {
+        pendingExpenseBadge.classList.add('d-none');
+      }
+    }
 
     // ===== รายการค่าใช้จ่ายที่พนักงานส่งมา =====
     const CLAIM_STATUS = {
@@ -2052,16 +2054,21 @@
       if (!payrollFrom.value || !payrollTo.value) return;
       try {
         const query = `from=${payrollFrom.value}&to=${payrollTo.value}`
-          + (claimStatusFilter.value ? `&status=${claimStatusFilter.value}` : '')
+          + (claimStatus ? `&status=${claimStatus}` : '')
           + (payrollEmployee.value ? `&employeeId=${payrollEmployee.value}` : '')
           + (payrollDepartment.value ? `&departmentId=${payrollDepartment.value}` : '');
         const rows = await fetch(`/api/expenses?${query}`).then(r => r.json());
         if (rows.error) { setSummary(claimSummary, rows.error, true); claimTable.innerHTML = errorRow(9); return; }
         const pending = rows.filter(row => row.status === 'pending');
         const approved = rows.filter(row => row.status === 'approved');
+        const rejected = rows.filter(row => row.status === 'rejected');
+        claimStatPending.textContent = baht(pending.reduce((sum, row) => sum + row.amount, 0));
+        claimStatApproved.textContent = baht(approved.reduce((sum, row) => sum + (row.approved_amount ?? 0), 0));
+        claimStatRejected.textContent = baht(rejected.reduce((sum, row) => sum + row.amount, 0));
         setSummary(claimSummary, `${formatDay(payrollFrom.value)} ถึง ${formatDay(payrollTo.value)}`
-          + ` · รอตรวจ ${pending.length} รายการ (${baht(pending.reduce((sum, row) => sum + row.amount, 0))} บาท)`
-          + ` · อนุมัติแล้ว ${approved.length} รายการ (${baht(approved.reduce((sum, row) => sum + (row.approved_amount ?? 0), 0))} บาท)`);
+          + ` · รอตรวจ ${pending.length} รายการ · อนุมัติแล้ว ${approved.length} · ไม่อนุมัติ ${rejected.length}`);
+        // ตัวเลขบนเมนูต้องนับทุกคนทั้งเดือน ไม่ใช่เฉพาะที่ตัวกรองแสดงอยู่
+        refreshPendingExpenseBadge();
         claimTable.innerHTML = rows.length ? rows.map(row => `<tr data-claim-id="${esc(row.id)}">
           <td class="ps-4 text-nowrap">${esc(formatDay(row.claim_date))}</td>
           <td class="text-nowrap"><span class="fw-semibold">${esc(row.employee_code)}</span> <span class="text-secondary">${esc(row.name)}</span>
@@ -2122,10 +2129,18 @@
         button.disabled = false;
       }
     });
-    claimStatusFilter.addEventListener('change', loadClaims);
+    let claimStatus = 'pending';
+    claimStatusPills.addEventListener('click', event => {
+      const button = event.target.closest('button[data-claim-status]');
+      if (!button) return;
+      claimStatus = button.dataset.claimStatus;
+      claimStatusPills.querySelectorAll('button').forEach(item => item.classList.toggle('active', item === button));
+      loadClaims();
+    });
 
     // ===== ค่าจ้าง เบิกเงิน และจ่ายเงิน =====
-    const baht = value => formatMoney(value);
+    // หน้าการเงินแสดงทศนิยม 2 ตำแหน่งเสมอ ให้ตรงกับหน้าพนักงานใน LINE และอ่านยอดเทียบกันได้ง่าย
+    const baht = value => new Intl.NumberFormat('th-TH',{ minimumFractionDigits:2, maximumFractionDigits:2 }).format(Number(value ?? 0));
     let payrollRows = [];
     const kindLabel = kind => kind === 'advance' ? 'เบิกล่วงหน้า' : 'จ่ายเงิน';
 
@@ -2136,13 +2151,20 @@
         const query = `from=${payrollFrom.value}&to=${payrollTo.value}${employeeId ? `&employeeId=${employeeId}` : ''}`
           + (payrollDepartment.value ? `&departmentId=${payrollDepartment.value}` : '');
         const data = await fetch(`/api/payroll?${query}`).then(r => r.json());
-        if (data.error) { setSummary(payrollSummary, data.error, true); payrollTable.innerHTML = errorRow(12); return; }
+        if (data.error) { setSummary(payrollSummary, data.error, true); payrollTable.innerHTML = errorRow(13); return; }
         payrollRows = data.rows ?? [];
         const withoutType = payrollRows.filter(row => !row.has_type).length;
         const totals = payrollRows.reduce((sum, row) => ({
           net: sum.net + row.net_pay, advance: sum.advance + row.advance_total,
-          paid: sum.paid + row.payment_total, balance: sum.balance + row.balance
-        }), { net:0, advance:0, paid:0, balance:0 });
+          paid: sum.paid + row.payment_total, balance: sum.balance + row.balance,
+          wage: sum.wage + row.base_pay, ot: sum.ot + row.ot_pay,
+          deduct: sum.deduct + row.absent_deduct + row.late_deduct,
+          expense: sum.expense + (row.approved_expense ?? 0)
+        }), { net:0, advance:0, paid:0, balance:0, wage:0, ot:0, deduct:0, expense:0 });
+        payStatWage.textContent = baht(totals.wage);
+        payStatOt.textContent = baht(totals.ot);
+        payStatDeduct.textContent = totals.deduct ? `-${baht(totals.deduct)}` : baht(0);
+        payStatBalance.textContent = baht(totals.balance);
         setSummary(payrollSummary, `${formatDay(payrollFrom.value)} ถึง ${formatDay(payrollTo.value)}`
           + ` · พนักงาน ${payrollRows.length} คน · ยอดสุทธิรวม ${baht(totals.net)} บาท`
           + ` · คงเหลือที่ต้องจ่าย ${baht(totals.balance)} บาท`
@@ -2164,6 +2186,7 @@
               : row.ot_pending_minutes > 0 ? '<span class="badge text-bg-warning">รออนุมัติ</span>'
               : row.ot_minutes ? '<span class="badge text-bg-secondary">ไม่อนุมัติ</span>' : ''}</td>
             <td class="text-end ${deduct ? 'text-danger' : 'text-secondary'}" title="ขาดงาน ${baht(row.absent_deduct)} บาท · มาสาย ${baht(row.late_deduct)} บาท (${row.late_minutes} นาที)">${deduct ? baht(deduct) : ''}</td>
+            <td class="text-end" style="color:#00695c" title="ค่าใช้จ่ายที่อนุมัติในเดือนนี้ บวกคืนให้พนักงานในยอดสุทธิ">${row.approved_expense ? `+${baht(row.approved_expense)}` : ''}</td>
             <td class="text-end fw-semibold">${row.has_type ? baht(row.net_pay) : dash}</td>
             <td class="text-end text-secondary">${row.advance_total ? baht(row.advance_total) : ''}</td>
             <td class="text-end text-secondary">${row.payment_total ? baht(row.payment_total) : ''}</td>
@@ -2173,13 +2196,14 @@
 
         payrollFoot.innerHTML = payrollRows.length ? `<tr class="table-light">
           <td class="ps-4 fw-semibold" colspan="8">รวมทั้งช่วง</td>
+          <td class="text-end">${totals.expense ? `+${baht(totals.expense)}` : ''}</td>
           <td class="text-end fw-semibold">${baht(totals.net)}</td>
           <td class="text-end">${baht(totals.advance)}</td>
           <td class="text-end">${baht(totals.paid)}</td>
           <td class="text-end pe-4 fw-semibold">${baht(totals.balance)}</td></tr>` : '';
       } catch {
         setSummary(payrollSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
-        payrollTable.innerHTML = errorRow(12);
+        payrollTable.innerHTML = errorRow(13);
         payrollFoot.innerHTML = '';
       }
     }
@@ -2190,8 +2214,11 @@
         const rows = await fetch(`/api/payroll/entries?from=${payrollFrom.value}&to=${payrollTo.value}${kind ? `&kind=${kind}` : ''}`).then(r => r.json());
         const advance = rows.filter(row => row.kind === 'advance').reduce((sum, row) => sum + row.amount, 0);
         const payment = rows.filter(row => row.kind === 'payment').reduce((sum, row) => sum + row.amount, 0);
+        advStatAdvance.textContent = baht(advance);
+        advStatPayment.textContent = baht(payment);
+        advStatCount.textContent = `${rows.length} รายการ`;
         setSummary(entryListSummary, `${formatDay(payrollFrom.value)} ถึง ${formatDay(payrollTo.value)}`
-          + ` · เบิกล่วงหน้า ${baht(advance)} บาท · จ่ายเงิน ${baht(payment)} บาท · ทั้งหมด ${rows.length} รายการ`);
+          + ` · ทั้งหมด ${rows.length} รายการ`);
         entryTable.innerHTML = rows.length ? rows.map(row => `<tr>
           <td class="ps-4 text-nowrap">${esc(formatDay(row.entry_date))}</td>
           <td class="fw-semibold">${esc(row.employee_code)}</td>
@@ -2248,11 +2275,11 @@
     function downloadPayrollCsv() {
       if (!payrollRows.length) return;
       const header = ['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','ประเภท','วิธีจ่าย','อัตรา','วันทำงาน','ขาดงาน','วันลา',
-        'สาย (นาที)','OT (นาที)','ค่าแรงพื้นฐาน','ค่า OT','หักขาดงาน','หักสาย','ยอดสุทธิ','เบิกล่วงหน้า','จ่ายแล้ว','คงเหลือ'];
+        'สาย (นาที)','OT (นาที)','ค่าแรงพื้นฐาน','ค่า OT','หักขาดงาน','หักสาย','ค่าใช้จ่ายที่อนุมัติ','ยอดสุทธิ','เบิกล่วงหน้า','จ่ายแล้ว','คงเหลือ'];
       const lines = [header].concat(payrollRows.map(row => [row.employee_code, row.name, row.department_name ?? '', row.employee_type_name ?? '',
         row.pay_type ? payMethod(row.pay_type) : '', row.pay_rate ?? '', row.worked_days, row.absent_days, row.leave_days,
         row.late_minutes, row.ot_minutes, row.base_pay, row.ot_pay, row.absent_deduct, row.late_deduct,
-        row.net_pay, row.advance_total, row.payment_total, row.balance]));
+        row.approved_expense ?? 0, row.net_pay, row.advance_total, row.payment_total, row.balance]));
       const csv = '\uFEFF' + lines.map(line => line.map(value => `"${String(value ?? '').replace(/"/g,'""')}"`).join(',')).join('\r\n');
       const link = document.createElement('a');
       link.href = URL.createObjectURL(new Blob([csv], { type:'text/csv;charset=utf-8' }));
@@ -2261,13 +2288,9 @@
       URL.revokeObjectURL(link.href);
     }
 
-    [payrollFrom, payrollTo].forEach(element =>
-      element.addEventListener('change', () => { loadPayroll(); loadEntryList(); loadOt(); loadClaims(); }));
     payrollEmployee.addEventListener('change', () => { loadPayroll(); loadOt(); loadClaims(); });
     payrollDepartment.addEventListener('change', () => { syncEmployeeOptions(); loadPayroll(); loadOt(); loadClaims(); });
     entryKindFilter.addEventListener('change', loadEntryList);
-    payrollThisMonth.addEventListener('click', () => { const [from, to] = monthRange(0); payrollFrom.value = from; payrollTo.value = to; loadPayroll(); loadEntryList(); loadOt(); });
-    payrollLastMonth.addEventListener('click', () => { const [from, to] = monthRange(-1); payrollFrom.value = from; payrollTo.value = to; loadPayroll(); loadEntryList(); loadOt(); });
     payrollCsvBtn.addEventListener('click', downloadPayrollCsv);
 
     // dropdown พนักงานของแต่ละหน้าต้องขึ้นแค่คนในกลุ่มที่เลือกไว้ในหน้านั้น
@@ -2730,13 +2753,15 @@
     addEmployeeBtn.addEventListener('click', () => openEmployeeForm(null));
     addShiftBtn.addEventListener('click', () => openShiftForm(null));
     // loadDashboard โหลดแค่ข้อมูลที่ใช้ร่วมกัน แต่ละหน้ามีตารางของตัวเองที่ต้องโหลดเพิ่ม
+    const FINANCE_PAGES = ['pay', 'advance', 'expenses'];
     const PAGE_LOADERS = {
-      permissions: () => [loadPermissions()],
       schedule: () => [loadDaySchedule()],
       leaves: () => [loadLeaveList()],
       missing: () => [loadMissing(), loadManualList()],
       reports: () => [loadReport()],
-      payroll: () => [loadPayroll(), loadEntryList(), loadOt(), loadClaims()]
+      pay: () => [loadPayroll(), loadOt()],
+      advance: () => [loadEntryList()],
+      expenses: () => [loadClaims(), loadPermissions()]
     };
 
     async function refreshActivePage() {
@@ -2768,11 +2793,10 @@
     leaveListTo.value = monthLast;
     reportFrom.value = monthFirst;
     reportTo.value = monthLast;
-    payrollFrom.value = monthFirst;
-    payrollTo.value = monthLast;
     missingFrom.value = monthFirst;
     missingTo.value = monthLast;
     entryDate.value = bangkokToday();
+    applyFinanceMonth();
     route();
     fetch('/api/leaves/types').then(r => r.json()).then(types => { leaveTypes = types; renderLeaveControls(); }).catch(() => {});
     loadDashboard();

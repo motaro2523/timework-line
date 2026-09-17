@@ -922,7 +922,7 @@ app.delete<{ Params: { id: string } }>('/api/time-logs/manual/:id', async (reque
 });
 
 // ===== รายการค่าใช้จ่ายที่พนักงานส่งเข้ามา =====
-const EXPENSE_CATEGORIES = ['ค่าเดินทาง', 'ค่าน้ำมัน', 'ค่าอาหาร', 'ค่าที่พัก', 'ค่าวัสดุอุปกรณ์', 'อื่นๆ'];
+const EXPENSE_CATEGORIES = ['ค่าเดินทาง', 'ค่าน้ำมัน', 'ค่าอาหาร', 'ค่าที่พัก', 'ค่าวัสดุอุปกรณ์', 'ค่าโทรศัพท์/อินเทอร์เน็ต', 'อื่นๆ'];
 const EXPENSE_STATUSES = ['pending', 'approved', 'rejected'];
 
 app.get('/api/expenses/categories', async () => EXPENSE_CATEGORIES);
@@ -1256,7 +1256,8 @@ async function computePayroll(from: string, to: string, employeeId: string, depa
            t.late_deduct_per_minute::float8 AS late_deduct_per_minute,
            t.monthly_days_divisor, t.work_hours_per_day::float8 AS work_hours_per_day,
            COALESCE(adv.total, 0)::float8 AS advance_total,
-           COALESCE(paid.total, 0)::float8 AS payment_total
+           COALESCE(paid.total, 0)::float8 AS payment_total,
+           COALESCE(exp.total, 0)::float8 AS approved_expense
     FROM daily d
     JOIN employees e ON e.id = d.employee_id
     LEFT JOIN departments dept ON dept.id = e.department_id
@@ -1267,9 +1268,14 @@ async function computePayroll(from: string, to: string, employeeId: string, depa
     LEFT JOIN (SELECT employee_id, SUM(amount) AS total FROM payroll_entries
                WHERE kind = 'payment' AND entry_date BETWEEN $1::date AND $2::date GROUP BY 1) paid
       ON paid.employee_id = d.employee_id
+    -- ค่าใช้จ่ายที่อนุมัติแล้วเป็นเงินที่พนักงานสำรองจ่ายไป จึงบวกคืนในยอดสุทธิ
+    -- ตอนคืนเงินจริงจะถูกบันทึกเป็น payroll_entries kind payment แล้วหักกลบกันเองในยอดคงเหลือ
+    LEFT JOIN (SELECT employee_id, SUM(COALESCE(approved_amount, 0)) AS total FROM expense_claims
+               WHERE status = 'approved' AND claim_date BETWEEN $1::date AND $2::date GROUP BY 1) exp
+      ON exp.employee_id = d.employee_id
     GROUP BY d.employee_id, d.employee_code, d.name, dept.name, t.id, t.name, t.pay_type, t.pay_rate,
              t.ot_multiplier, t.late_deduct_per_minute, t.monthly_days_divisor, t.work_hours_per_day,
-             adv.total, paid.total
+             adv.total, paid.total, exp.total
     ORDER BY d.employee_code
   `, [from, to, employeeId, departmentId]);
 
@@ -1286,7 +1292,8 @@ async function computePayroll(from: string, to: string, employeeId: string, depa
     const absentDeduct = monthly ? Number(row.absent_days) * dailyRate : 0;
     const otPay = (Number(row.ot_paid_minutes) / 60) * hourlyRate * (row.ot_multiplier ?? 0);
     const lateDeduct = Number(row.late_minutes) * (row.late_deduct_per_minute ?? 0);
-    const netPay = basePay + otPay - absentDeduct - lateDeduct;
+    const approvedExpense = Number(row.approved_expense ?? 0);
+    const netPay = basePay + otPay - absentDeduct - lateDeduct + approvedExpense;
     return {
       ...row,
       scheduled_days: Number(row.scheduled_days),
@@ -1302,6 +1309,7 @@ async function computePayroll(from: string, to: string, employeeId: string, depa
       ot_pay: round2(otPay),
       absent_deduct: round2(absentDeduct),
       late_deduct: round2(lateDeduct),
+      approved_expense: round2(approvedExpense),
       net_pay: round2(netPay),
       balance: round2(netPay - row.advance_total - row.payment_total)
     };
