@@ -301,6 +301,52 @@ app.patch<{ Params: { id: string }; Body: { name?: string; active?: boolean; can
   }
 });
 
+// ===== สิทธิ์การใช้งาน =====
+// ผู้ดูแลเลือกได้จากหน้าเดียวว่าใครส่งรายการค่าใช้จ่ายผ่าน LINE ได้บ้าง
+// รับมาเป็นรายการที่ให้สิทธิ์และรายการที่ถอนสิทธิ์ ไม่ใช่รายชื่อทั้งหมด
+// เพราะหน้าจอกรองตามแผนกได้ ถ้าส่งมาทั้งชุดคนนอกตัวกรองจะโดนถอนสิทธิ์ไปด้วย
+app.post<{ Body: { grant?: unknown; revoke?: unknown } }>('/api/permissions/expense', async (request, reply) => {
+  const toIds = (value: unknown): number[] | null => {
+    if (value === undefined || value === null) return [];
+    if (!Array.isArray(value)) return null;
+    const ids: number[] = [];
+    for (const item of value) {
+      const id = Number(item);
+      if (!Number.isSafeInteger(id) || id <= 0) return null;
+      ids.push(id);
+    }
+    return [...new Set(ids)];
+  };
+  const grant = toIds(request.body?.grant);
+  const revoke = toIds(request.body?.revoke);
+  if (!grant || !revoke) return reply.code(400).send({ error: 'รายการพนักงานไม่ถูกต้อง' });
+  const overlap = grant.filter(id => revoke.includes(id));
+  if (overlap.length) return reply.code(400).send({ error: 'มีพนักงานที่ทั้งให้สิทธิ์และถอนสิทธิ์ในคำสั่งเดียวกัน' });
+  if (!grant.length && !revoke.length) return reply.code(400).send({ error: 'ไม่มีสิทธิ์ที่ต้องเปลี่ยน' });
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const changed = await client.query(
+      `UPDATE employees SET can_submit_expense = (id = ANY($1::bigint[]))
+        WHERE id = ANY($2::bigint[])
+          AND can_submit_expense IS DISTINCT FROM (id = ANY($1::bigint[]))
+        RETURNING id, employee_code, can_submit_expense`,
+      [grant, [...grant, ...revoke]]
+    );
+    await client.query('COMMIT');
+    return {
+      granted: changed.rows.filter(row => row.can_submit_expense).length,
+      revoked: changed.rows.filter(row => !row.can_submit_expense).length
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
 // ลำดับความสำคัญของตาราง: ตารางรายวันที่ > ตารางประจำสัปดาห์ > กะประจำในข้อมูลพนักงาน
 // has_weekly ใช้แยกว่า "ไม่มีแถวของวันนั้น" คือวันหยุดตามตาราง หรือยังไม่เคยตั้งตารางเลย
 const scheduleSourceSql = (dateExpression: string) => `

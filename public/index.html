@@ -33,6 +33,7 @@
         <a class="nav-link" href="#missing" data-page="missing"><i class="bi bi-exclamation-triangle me-2"></i>ลืมลงเวลา</a>
         <a class="nav-link" href="#reports" data-page="reports"><i class="bi bi-file-earmark-bar-graph me-2"></i>รายงาน</a>
         <a class="nav-link" href="#payroll" data-page="payroll"><i class="bi bi-cash-coin me-2"></i>ค่าจ้าง</a>
+        <a class="nav-link" href="#permissions" data-page="permissions"><i class="bi bi-shield-check me-2"></i>สิทธิ์การใช้งาน</a>
         <a class="nav-link" href="#settings" data-page="settings"><i class="bi bi-gear-fill me-2"></i>ตั้งค่า</a>
       </nav>
       <div class="mt-auto text-white-50 small px-2 pt-5"><i class="bi bi-person-circle me-1"></i>ผู้ดูแลระบบ</div>
@@ -543,6 +544,47 @@
         </section>
       </div>
 
+      <!-- หน้า สิทธิ์การใช้งาน -->
+      <div id="view-permissions" class="d-none">
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">สิทธิ์ส่งรายการค่าใช้จ่ายผ่าน LINE</h2>
+            <small class="text-secondary" id="permSummary">กำลังโหลดข้อมูล...</small>
+            <div class="row g-2 mt-3">
+              <div class="col-md-4">
+                <label class="form-label small text-secondary mb-1">แผนก / กลุ่ม</label>
+                <select class="form-select form-select-sm" id="permDepartment"><option value="">ทุกแผนก</option></select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small text-secondary mb-1">ค้นหาชื่อหรือรหัส</label>
+                <input class="form-control form-control-sm" id="permSearch" placeholder="เช่น E002 หรือชื่อพนักงาน" autocomplete="off">
+              </div>
+              <div class="col-md-4 d-flex align-items-end gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="permCheckAllBtn">เลือกทุกคนที่เห็น</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="permClearAllBtn">ล้างทุกคนที่เห็น</button>
+              </div>
+            </div>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-4">รหัส</th><th>ชื่อพนักงาน</th><th>แผนก</th><th>บัญชี LINE</th>
+              <th class="text-center">ส่งรายการค่าใช้จ่ายได้</th>
+            </tr></thead>
+            <tbody id="permTable"><tr><td colspan="5" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0 d-flex flex-wrap align-items-center gap-3">
+            <button type="button" class="btn btn-success" id="permSaveBtn" disabled><i class="bi bi-check2 me-1"></i>บันทึกสิทธิ์</button>
+            <button type="button" class="btn btn-outline-secondary" id="permResetBtn" disabled>ยกเลิกที่แก้ไว้</button>
+            <small class="text-secondary" id="permDirty"></small>
+          </div>
+        </section>
+        <div class="alert alert-light border small text-secondary">
+          <i class="bi bi-info-circle me-1"></i>ค่าเริ่มต้นคือปิดทุกคน คนที่ยังไม่ได้เปิดสิทธิ์จะเปิดหน้าค่าใช้จ่ายใน LINE ไม่ได้ และจะเห็นข้อความให้มาแจ้งผู้ดูแล
+          · เปลี่ยนแล้วต้องกด บันทึกสิทธิ์ ถึงจะมีผล · คนที่ยังไม่ผูกบัญชี LINE ต่อให้เปิดสิทธิ์ก็ยังใช้เมนูไม่ได้จนกว่าจะผูกบัญชีก่อน
+          · ลิงก์หน้าค่าใช้จ่ายสำหรับริชเมนูคือ <code>https://liff.line.me/2011494585-rYOQzGC5/expense</code>
+        </div>
+      </div>
+
       <!-- หน้า ตั้งค่า -->
       <div id="view-settings" class="d-none">
         <section class="table-card card mb-4">
@@ -913,6 +955,7 @@
       missing:   { title:'ลืมลงเวลา',     subtitle:'หาวันที่ลืมสแกน แล้วเติมเวลาย้อนหลังให้ถูกต้อง',  action:'none'     },
       reports:   { title:'รายงาน',       subtitle:'สรุปเวลาทำงาน สาย OT และการลา คิดตามกะ',      action:'none'     },
       payroll:   { title:'ค่าจ้าง',       subtitle:'คำนวณค่าจ้าง บันทึกการเบิกและการจ่ายเงิน',      action:'none'     },
+      permissions: { title:'สิทธิ์การใช้งาน', subtitle:'เลือกว่าพนักงานคนไหนใช้เมนูไหนใน LINE ได้',   action:'none'     },
       settings:  { title:'ตั้งค่า',        subtitle:'แผนก ประเภทพนักงาน และวิธีจ่ายค่าตอบแทน',      action:'settings' }
     };
 
@@ -1204,6 +1247,7 @@
           `<option value="${esc(employee.id)}">${esc(employee.employee_code)} ${esc(employee.name)}</option>`).join('');
         entryEmployee.value = previousEntryEmployee || (employees[0]?.id ?? '');
         renderLeaveControls();
+        loadPermissions();
         await loadWeekGrid();
         const checkedIn = new Set(logs.filter(l => l.event_type === 'check_in').map(l => l.employee_code));
         const checkedOut = new Set(logs.filter(l => l.event_type === 'check_out').map(l => l.employee_code));
@@ -1874,6 +1918,112 @@
         setSummary(otSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
       } finally {
         otApproveAllBtn.innerHTML = label;
+      }
+    });
+
+    // ===== สิทธิ์การใช้งาน =====
+    // เก็บเฉพาะคนที่ผู้ดูแลแก้ค่าไว้แต่ยังไม่บันทึก เพื่อไม่ให้การรีเฟรชข้อมูลกลางทับสิ่งที่กำลังแก้
+    const permDraft = new Map();
+
+    const permVisible = () => {
+      const keyword = permSearch.value.trim().toLowerCase();
+      return employeesInDepartment(permDepartment.value)
+        .filter(employee => employee.active)
+        .filter(employee => !keyword
+          || employee.name.toLowerCase().includes(keyword)
+          || String(employee.employee_code).toLowerCase().includes(keyword));
+    };
+    const permValue = employee => permDraft.has(String(employee.id))
+      ? permDraft.get(String(employee.id))
+      : Boolean(employee.can_submit_expense);
+
+    function renderPermissions() {
+      const rows = permVisible();
+      const allowed = employeeList.filter(employee => employee.active && permValue(employee)).length;
+      const activeCount = employeeList.filter(employee => employee.active).length;
+      setSummary(permSummary, `เปิดสิทธิ์อยู่ ${allowed} คน จากพนักงานที่ใช้งาน ${activeCount} คน`
+        + (rows.length === activeCount ? '' : ` · แสดงอยู่ ${rows.length} คนตามตัวกรอง`));
+      permTable.innerHTML = rows.length ? rows.map(employee => {
+        const on = permValue(employee);
+        const edited = permDraft.has(String(employee.id));
+        return `<tr data-perm-id="${esc(employee.id)}"${edited ? ' class="table-warning"' : ''}>
+          <td class="ps-4 fw-semibold text-nowrap">${esc(employee.employee_code)}</td>
+          <td>${esc(employee.name)}</td>
+          <td class="text-secondary">${employee.department_name ? esc(employee.department_name) : dash}</td>
+          <td>${lineBadge(Boolean(employee.line_user_id))}</td>
+          <td class="text-center">
+            <div class="form-check form-switch d-inline-block m-0">
+              <input class="form-check-input" type="checkbox" data-perm-toggle${on ? ' checked' : ''}
+                     aria-label="ให้ ${esc(employee.name)} ส่งรายการค่าใช้จ่ายได้">
+            </div>
+          </td>
+        </tr>`;
+      }).join('') : emptyRow(5, employeeList.some(employee => employee.active)
+        ? 'ไม่มีพนักงานที่ตรงกับตัวกรอง'
+        : 'ยังไม่มีพนักงานที่ใช้งานอยู่');
+      permSaveBtn.disabled = permDraft.size === 0;
+      permResetBtn.disabled = permDraft.size === 0;
+      permDirty.textContent = permDraft.size ? `แก้ไว้ ${permDraft.size} คน ยังไม่ได้บันทึก` : '';
+      permDirty.classList.toggle('text-warning-emphasis', permDraft.size > 0);
+    }
+
+    async function loadPermissions() {
+      permDepartment.innerHTML = ['<option value="">ทุกแผนก</option>']
+        .concat(deptList.map(d => `<option value="${esc(d.id)}"${String(permDepartment.value) === String(d.id) ? ' selected' : ''}>${esc(d.name)}</option>`)).join('');
+      renderPermissions();
+    }
+
+    permDepartment.addEventListener('change', renderPermissions);
+    permSearch.addEventListener('input', renderPermissions);
+
+    permTable.addEventListener('change', event => {
+      const toggle = event.target.closest('[data-perm-toggle]');
+      if (!toggle) return;
+      const id = event.target.closest('[data-perm-id]').dataset.permId;
+      const employee = employeeList.find(item => String(item.id) === id);
+      if (!employee) return;
+      // กลับไปเท่าค่าเดิมแล้วก็ไม่ต้องนับเป็นการแก้ไข
+      if (toggle.checked === Boolean(employee.can_submit_expense)) permDraft.delete(id);
+      else permDraft.set(id, toggle.checked);
+      renderPermissions();
+    });
+
+    const permSetVisible = value => {
+      for (const employee of permVisible()) {
+        const id = String(employee.id);
+        if (value === Boolean(employee.can_submit_expense)) permDraft.delete(id);
+        else permDraft.set(id, value);
+      }
+      renderPermissions();
+    };
+    permCheckAllBtn.addEventListener('click', () => permSetVisible(true));
+    permClearAllBtn.addEventListener('click', () => permSetVisible(false));
+    permResetBtn.addEventListener('click', () => { permDraft.clear(); renderPermissions(); });
+
+    permSaveBtn.addEventListener('click', async () => {
+      if (!permDraft.size) return;
+      const grant = [];
+      const revoke = [];
+      for (const [id, value] of permDraft) (value ? grant : revoke).push(Number(id));
+      const label = permSaveBtn.innerHTML;
+      permSaveBtn.disabled = true;
+      permSaveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังบันทึก';
+      try {
+        const response = await fetch('/api/permissions/expense', {
+          method:'POST', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ grant, revoke })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) { setSummary(permSummary, result.error ?? 'บันทึกสิทธิ์ไม่สำเร็จ', true); return; }
+        permDraft.clear();
+        await loadDashboard();
+        renderPermissions();
+        setSummary(permSummary, `บันทึกแล้ว เปิดสิทธิ์เพิ่ม ${result.granted} คน ถอนสิทธิ์ ${result.revoked} คน`);
+      } catch {
+        setSummary(permSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+      } finally {
+        permSaveBtn.innerHTML = label;
+        permSaveBtn.disabled = permDraft.size === 0;
       }
     });
 
@@ -2556,6 +2706,7 @@
     addShiftBtn.addEventListener('click', () => openShiftForm(null));
     // loadDashboard โหลดแค่ข้อมูลที่ใช้ร่วมกัน แต่ละหน้ามีตารางของตัวเองที่ต้องโหลดเพิ่ม
     const PAGE_LOADERS = {
+      permissions: () => [loadPermissions()],
       schedule: () => [loadDaySchedule()],
       leaves: () => [loadLeaveList()],
       missing: () => [loadMissing(), loadManualList()],
