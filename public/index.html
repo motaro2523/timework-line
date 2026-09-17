@@ -14,6 +14,12 @@
     .stat-card .stat-label { font-size:13px; color:#607d8b; }
     .stat-card .stat-value { font-size:24px; font-weight:700; }
     .perm-row { border:1px solid #eceff1; border-radius:12px; padding:10px 12px; }
+    .legend-dot { display:inline-block; width:.75rem; height:.75rem; border-radius:.25rem; margin-right:.35rem; vertical-align:-1px; }
+    .level-cell { border:0; width:100%; border-radius:9px; padding:8px 6px; font-size:.85rem; font-weight:600; }
+    .level-edit { background:#d7f2e3; color:#0b5f38; }
+    .level-view { background:#e3f2fd; color:#01579b; }
+    .level-none { background:#f1f4f7; color:#78909c; }
+    .level-cell:disabled { opacity:1; cursor:not-allowed; }
     .kind-btn { background:#fff; color:#607d8b; border:1px solid #e0e6ec; border-radius:10px; padding:10px; font-weight:600; }
     .kind-btn:hover { border-color:#b0bec5; color:#455a64; }
     .kind-btn.active[data-entry-kind="advance"] { background:#fff3cd; color:#7a4f01; border-color:#ffe08a; }
@@ -53,6 +59,13 @@
                 style="background:#ffca28;color:#3e2723;font-size:.75rem;font-weight:700">0</span>
         </a>
         <a class="nav-link" href="#settings" data-page="settings"><i class="bi bi-gear-fill me-2"></i>ตั้งค่า</a>
+        <div class="nav-group-label">ระบบ</div>
+        <a class="nav-link d-flex align-items-center" href="#admins" data-page="admins">
+          <i class="bi bi-person-badge-fill me-2"></i><span>ผู้ดูแลระบบ</span>
+          <span class="badge rounded-pill ms-auto d-none" id="pendingAdminBadge"
+                style="background:#ffca28;color:#3e2723;font-size:.75rem;font-weight:700">0</span>
+        </a>
+        <a class="nav-link" href="#roles" data-page="roles"><i class="bi bi-shield-lock-fill me-2"></i>สิทธิ์ตามบทบาท</a>
       </nav>
       <div class="mt-auto text-white-50 small px-2 pt-5"><i class="bi bi-person-circle me-1"></i>ผู้ดูแลระบบ</div>
     </aside>
@@ -69,6 +82,20 @@
             <button class="btn btn-sm btn-outline-secondary" id="monthPrevBtn" aria-label="เดือนก่อนหน้า"><i class="bi bi-chevron-left"></i></button>
             <span class="fw-semibold text-center px-2" id="monthLabel" style="min-width:8.5rem"></span>
             <button class="btn btn-sm btn-outline-secondary" id="monthNextBtn" aria-label="เดือนถัดไป"><i class="bi bi-chevron-right"></i></button>
+          </div>
+          <div class="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" id="meButton">
+              <i class="bi bi-person-circle me-1"></i><span id="meName">กำลังโหลด</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li class="px-3 py-2">
+                <div class="fw-semibold" id="meNameFull">—</div>
+                <div class="small text-secondary" id="meEmail">—</div>
+                <span class="badge mt-1" id="meRole">—</span>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li><button class="dropdown-item text-danger" id="logoutBtn"><i class="bi bi-box-arrow-right me-2"></i>ออกจากระบบ</button></li>
+            </ul>
           </div>
           <button class="btn btn-outline-secondary" id="refreshBtn"><i class="bi bi-arrow-clockwise"></i><span class="d-none d-sm-inline ms-1">รีเฟรช</span></button>
           <button class="btn btn-success" id="addEmployeeBtn"><i class="bi bi-person-plus-fill me-1"></i>เพิ่มพนักงาน</button>
@@ -607,6 +634,61 @@
         </div>
       </div>
 
+      <!-- หน้า ผู้ดูแลระบบ -->
+      <div id="view-admins" class="d-none">
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4 d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+              <h2 class="h5 fw-bold mb-0">คำขอรออนุมัติ</h2>
+              <small class="text-secondary" id="requestSummary">กำลังโหลดข้อมูล...</small>
+            </div>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-4">ผู้ขอ</th><th>ติดต่อ</th><th>สิทธิ์ที่ขอ</th><th>แผนกที่ดูแล</th><th>ข้อความ</th><th>ส่งเมื่อ</th><th class="pe-4 text-end">ดำเนินการ</th>
+            </tr></thead>
+            <tbody id="requestTable"><tr><td colspan="7" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>แก้สิทธิ์ในช่องก่อนกดอนุมัติได้ · บทบาทหัวหน้าแผนกต้องเลือกแผนกด้วย ระบบจะบังคับให้เห็นเฉพาะพนักงานในแผนกนั้น · อนุมัติแล้วผู้ขอเข้าสู่ระบบได้ทันที และระบบจะแจ้งทาง LINE ถ้าผูกบัญชีไว้</small></div>
+        </section>
+
+        <section class="table-card card">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">ผู้ดูแลระบบที่ใช้งานอยู่</h2>
+            <small class="text-secondary" id="adminSummary">กำลังโหลดข้อมูล...</small>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr>
+              <th class="ps-4">ชื่อ</th><th>อีเมล</th><th>สิทธิ์</th><th>แผนก</th><th>บัญชี LINE</th><th>เข้าใช้ล่าสุด</th><th class="pe-4 text-end">สถานะ</th>
+            </tr></thead>
+            <tbody id="adminTable"><tr><td colspan="7" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>ต้องมีผู้ดูแลระบบที่เปิดใช้งานอย่างน้อย 1 บัญชีเสมอ · ปิดบัญชีหรือเปลี่ยนสิทธิ์แล้ว session ที่ค้างอยู่จะถูกตัดทันที · ผูกบัญชี LINE ไว้เพื่อให้รับลิงก์ตั้งรหัสผ่านและการแจ้งเตือนได้</small></div>
+        </section>
+      </div>
+
+      <!-- หน้า สิทธิ์ตามบทบาท -->
+      <div id="view-roles" class="d-none">
+        <section class="table-card card">
+          <div class="card-header bg-white border-0 pt-4 px-4 d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+              <h2 class="h5 fw-bold mb-0">ตารางสิทธิ์ · เมนู × บทบาท</h2>
+              <small class="text-secondary" id="roleSummary">กดที่ช่องเพื่อสลับ ไม่เห็น → ดูได้ → แก้ได้ → ดูได้ (ทีม) → แก้ได้ (ทีม)</small>
+            </div>
+            <div class="d-flex gap-3 small text-secondary align-items-center">
+              <span><span class="legend-dot" style="background:#d7f2e3"></span>แก้ได้</span>
+              <span><span class="legend-dot" style="background:#e3f2fd"></span>ดูได้</span>
+              <span><span class="legend-dot" style="background:#f1f4f7"></span>ไม่เห็น</span>
+            </div>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table align-middle mb-0">
+            <thead class="table-light"><tr id="roleHead"><th class="ps-4">เมนู / หน้า</th></tr></thead>
+            <tbody id="roleTable"><tr><td class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
+          </table></div></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>สิทธิ์ของผู้ดูแลระบบถูกล็อกไว้เป็นแก้ได้ทั้งหมด แก้ไม่ได้ เพื่อไม่ให้ตั้งค่าพลาดแล้วล็อกตัวเองออกจากระบบ · ระดับที่มีคำว่า (ทีม) หมายถึงเห็นเฉพาะพนักงานในแผนกของตัวเอง · การเปลี่ยนมีผลทันทีกับผู้ใช้บทบาทนั้นในการเรียกครั้งถัดไป</small></div>
+        </section>
+      </div>
+
       <!-- หน้า ตั้งค่า -->
       <div id="view-settings" class="d-none">
         <section class="table-card card mb-4">
@@ -992,7 +1074,9 @@
       pay:       { title:'เงินค่าตอบแทน',  subtitle:'ค่าแรง OT และยอดคงเหลือรอจ่ายของพนักงานทุกคน',  action:'none'     },
       advance:   { title:'เงินที่เบิก',     subtitle:'บันทึกเงินเบิกล่วงหน้าและการจ่ายเงินให้พนักงาน',   action:'none'     },
       expenses:  { title:'รายการเงินค่าใช้จ่าย', subtitle:'ตรวจและอนุมัติรายการที่พนักงานส่งเข้ามาผ่าน LINE', action:'none' },
-      settings:  { title:'ตั้งค่า',        subtitle:'แผนก ประเภทพนักงาน และวิธีจ่ายค่าตอบแทน',      action:'settings' }
+      settings:  { title:'ตั้งค่า',        subtitle:'แผนก ประเภทพนักงาน และวิธีจ่ายค่าตอบแทน',      action:'settings' },
+      admins:    { title:'คำขอใช้งานและผู้ดูแลระบบ', subtitle:'อนุมัติแล้วผู้ขอจะเข้าสู่ระบบได้ทันที',  action:'none'     },
+      roles:     { title:'สิทธิ์ตามบทบาท',  subtitle:'กำหนดว่าบทบาทไหนเห็นและแก้เมนูใดได้บ้าง',      action:'none'     }
     };
 
     let activePage = 'overview';
@@ -1030,17 +1114,24 @@
 
     function route() {
       const requested = location.hash.replace('#','');
-      const page = PAGES[requested] ? requested : 'overview';
+      let page = PAGES[requested] ? requested : 'overview';
+      // เปิดหน้าที่ไม่มีสิทธิ์ไม่ได้ ให้เด้งไปหน้าแรกที่เห็นได้แทน
+      if (!allowed(PAGE_PERMISSION[page] ?? page)) {
+        page = Object.keys(PAGES).find(name => allowed(PAGE_PERMISSION[name] ?? name)) ?? 'overview';
+      }
       activePage = page;
       for (const name of Object.keys(PAGES)) document.querySelector(`#view-${name}`).classList.toggle('d-none', name !== page);
       document.querySelectorAll('.nav-link[data-page]').forEach(link => link.classList.toggle('active', link.dataset.page === page));
       pageTitle.textContent = PAGES[page].title;
       pageSubtitle.textContent = PAGES[page].subtitle;
-      addEmployeeBtn.classList.toggle('d-none', PAGES[page].action !== 'employee');
-      addShiftBtn.classList.toggle('d-none', PAGES[page].action !== 'shift');
-      addTypeBtn.classList.toggle('d-none', PAGES[page].action !== 'settings');
-      addDeptBtn.classList.toggle('d-none', PAGES[page].action !== 'settings');
-      addSiteBtn.classList.toggle('d-none', PAGES[page].action !== 'settings');
+      const showAction = (button, action) =>
+        button.classList.toggle('d-none',
+          PAGES[page].action !== action || (button.dataset.needWrite ? !writable(button.dataset.needWrite) : false));
+      showAction(addEmployeeBtn, 'employee');
+      showAction(addShiftBtn, 'shift');
+      showAction(addTypeBtn, 'settings');
+      showAction(addDeptBtn, 'settings');
+      showAction(addSiteBtn, 'settings');
       monthPicker.classList.toggle('d-none', !FINANCE_PAGES.includes(page));
       window.scrollTo(0,0);
     }
@@ -1990,6 +2081,186 @@
       }
     });
 
+    // ===== ผู้ดูแลระบบ =====
+    const ROLE_LABEL = { admin:'ผู้ดูแลระบบ', hr:'ฝ่ายบุคคล', finance:'การเงิน', lead:'หัวหน้าแผนก' };
+    const roleBadge = role => {
+      const [background, color] = ROLE_BADGE[role] ?? ['#eceff1','#546e7a'];
+      return `<span class="badge rounded-pill" style="background:${background};color:${color}">${esc(ROLE_LABEL[role] ?? role)}</span>`;
+    };
+    const roleOptions = selected => Object.entries(ROLE_LABEL).map(([key, label]) =>
+      `<option value="${key}"${key === selected ? ' selected' : ''}>${esc(label)}</option>`).join('');
+    const deptOptions = selected => ['<option value="">ไม่กำหนด</option>'].concat(deptList.map(d =>
+      `<option value="${esc(d.id)}"${String(selected ?? '') === String(d.id) ? ' selected' : ''}>${esc(d.name)}</option>`)).join('');
+
+    async function loadAdmins() {
+      try {
+        const [requests, admins] = await Promise.all([
+          fetch('/api/admins/requests').then(r => r.json()),
+          fetch('/api/admins').then(r => r.json())
+        ]);
+        if (requests.error || admins.error) {
+          setSummary(requestSummary, requests.error ?? admins.error, true);
+          requestTable.innerHTML = errorRow(7); adminTable.innerHTML = errorRow(7);
+          return;
+        }
+        pendingAdminBadge.textContent = requests.length;
+        pendingAdminBadge.classList.toggle('d-none', requests.length === 0);
+        setSummary(requestSummary, requests.length ? `มี ${requests.length} คำขอรอการตัดสินใจ` : 'ไม่มีคำขอค้างอยู่');
+        requestTable.innerHTML = requests.length ? requests.map(row => `<tr data-admin-id="${esc(row.id)}">
+          <td class="ps-4"><div class="fw-semibold">${esc(row.name)}</div><div class="small text-secondary">${esc(row.email)}</div></td>
+          <td class="text-nowrap">${esc(row.phone) || dash}</td>
+          <td><select class="form-select form-select-sm" data-admin-role style="min-width:9rem">${roleOptions(row.requested_role ?? 'hr')}</select></td>
+          <td><select class="form-select form-select-sm" data-admin-dept style="min-width:9rem">${deptOptions(row.department_id)}</select></td>
+          <td class="small text-secondary" style="max-width:230px">${esc(row.request_note) || dash}</td>
+          <td class="text-nowrap small text-secondary">${esc(row.created_at)}</td>
+          <td class="pe-4 text-end text-nowrap">
+            <button type="button" class="btn btn-sm btn-success" data-admin-approve>อนุมัติ</button>
+            <button type="button" class="btn btn-sm btn-outline-danger ms-1" data-admin-reject>ปฏิเสธ</button>
+          </td>
+        </tr>`).join('') : emptyRow(7, 'ยังไม่มีคำขอใช้งานเข้ามา');
+
+        const active = admins.filter(row => row.status === 'active').length;
+        setSummary(adminSummary, `ทั้งหมด ${admins.length} บัญชี เปิดใช้งาน ${active} บัญชี`);
+        adminTable.innerHTML = admins.length ? admins.map(row => `<tr data-admin-id="${esc(row.id)}">
+          <td class="ps-4 fw-semibold">${esc(row.name)}${me && String(me.id) === String(row.id) ? ' <span class="badge text-bg-light border text-secondary">คุณ</span>' : ''}</td>
+          <td class="small text-secondary">${esc(row.email)}</td>
+          <td><select class="form-select form-select-sm" data-admin-role style="min-width:9rem">${roleOptions(row.role)}</select></td>
+          <td><select class="form-select form-select-sm" data-admin-dept style="min-width:9rem">${deptOptions(row.department_id)}</select></td>
+          <td>${row.line_user_id
+            ? '<span class="badge text-bg-success-subtle text-success-emphasis">ผูกแล้ว</span>'
+            : '<button type="button" class="btn btn-sm btn-outline-secondary" data-admin-line>ผูกบัญชี</button>'}</td>
+          <td class="text-nowrap small text-secondary">${esc(row.last_login_at) || 'ยังไม่เคยเข้าใช้'}</td>
+          <td class="pe-4 text-end">
+            <button type="button" class="btn btn-sm rounded-pill fw-bold ${row.status === 'active' ? 'btn-success' : 'btn-light border'}"
+                    data-admin-status style="min-width:5.5rem">${row.status === 'active' ? 'ใช้งาน' : 'ปิดอยู่'}</button>
+          </td>
+        </tr>`).join('') : emptyRow(7, 'ยังไม่มีบัญชีผู้ดูแล');
+      } catch {
+        setSummary(requestSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        requestTable.innerHTML = errorRow(7); adminTable.innerHTML = errorRow(7);
+      }
+    }
+
+    async function patchAdmin(id, body, button) {
+      const label = button ? button.innerHTML : '';
+      if (button) { button.disabled = true; button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; }
+      try {
+        const response = await fetch(`/api/admins/${id}`, {
+          method:'PATCH', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body)
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) { setSummary(adminSummary, result.error ?? 'บันทึกไม่สำเร็จ', true); return false; }
+        await loadAdmins();
+        return true;
+      } catch {
+        setSummary(adminSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        return false;
+      } finally {
+        if (button && button.isConnected) { button.innerHTML = label; button.disabled = false; }
+      }
+    }
+
+    function adminRowValues(row) {
+      return {
+        role: row.querySelector('[data-admin-role]')?.value,
+        departmentId: row.querySelector('[data-admin-dept]')?.value ?? ''
+      };
+    }
+
+    requestTable.addEventListener('click', async event => {
+      const row = event.target.closest('tr[data-admin-id]');
+      if (!row) return;
+      const approve = event.target.closest('[data-admin-approve]');
+      const reject = event.target.closest('[data-admin-reject]');
+      if (approve) return void patchAdmin(row.dataset.adminId, { status:'active', ...adminRowValues(row) }, approve);
+      if (reject && confirm('ปฏิเสธคำขอนี้?')) return void patchAdmin(row.dataset.adminId, { status:'rejected' }, reject);
+    });
+
+    adminTable.addEventListener('click', async event => {
+      const row = event.target.closest('tr[data-admin-id]');
+      if (!row) return;
+      const status = event.target.closest('[data-admin-status]');
+      if (status) {
+        const next = status.textContent.trim() === 'ใช้งาน' ? 'disabled' : 'active';
+        if (next === 'disabled' && !confirm('ปิดบัญชีนี้? ผู้ใช้จะถูกออกจากระบบทันที')) return;
+        return void patchAdmin(row.dataset.adminId, { status: next }, status);
+      }
+      const link = event.target.closest('[data-admin-line]');
+      if (link) {
+        const linked = employeeList.filter(employee => employee.line_user_id);
+        if (!linked.length) return alert('ยังไม่มีพนักงานคนไหนผูกบัญชี LINE ไว้');
+        const choice = prompt('ผูกกับบัญชี LINE ของพนักงานคนไหน พิมพ์รหัสพนักงาน\n\n'
+          + linked.map(employee => `${employee.employee_code} ${employee.name}`).join('\n'));
+        if (!choice) return;
+        const employee = linked.find(item => item.employee_code.toLowerCase() === choice.trim().toLowerCase());
+        if (!employee) return alert('ไม่พบรหัสพนักงานนั้น');
+        return void patchAdmin(row.dataset.adminId, { lineUserId: employee.line_user_id }, link);
+      }
+    });
+
+    adminTable.addEventListener('change', async event => {
+      const row = event.target.closest('tr[data-admin-id]');
+      if (!row) return;
+      if (event.target.matches('[data-admin-role], [data-admin-dept]')) {
+        await patchAdmin(row.dataset.adminId, adminRowValues(row), null);
+      }
+    });
+
+    // ===== ตารางสิทธิ์ตามบทบาท =====
+    const LEVEL_TEXT = { none:'ไม่เห็น', view:'ดูได้', edit:'แก้ได้', viewTeam:'ดูได้ (ทีม)', editTeam:'แก้ได้ (ทีม)' };
+    const LEVEL_CYCLE = ['none','view','edit','viewTeam','editTeam'];
+    const levelClass = level => level === 'none' ? 'level-none'
+      : level.startsWith('view') ? 'level-view' : 'level-edit';
+
+    async function loadRoleMatrix() {
+      try {
+        const data = await fetch('/api/role-permissions').then(r => r.json());
+        if (data.error) { setSummary(roleSummary, data.error, true); roleTable.innerHTML = errorRow(5); return; }
+        roleHead.innerHTML = '<th class="ps-4">เมนู / หน้า</th>'
+          + data.roles.map(role => `<th class="text-center">${esc(role.label)}</th>`).join('');
+        roleTable.innerHTML = data.pages.map(page => `<tr>
+          <td class="ps-4"><div class="fw-semibold">${esc(page.label)}</div></td>
+          ${data.roles.map(role => {
+            const level = data.matrix[role.key][page.key];
+            const locked = role.key === 'admin';
+            return `<td class="text-center" style="min-width:8rem">
+              <button type="button" class="level-cell ${levelClass(level)}" data-role="${esc(role.key)}"
+                      data-page-key="${esc(page.key)}" data-level="${esc(level)}"${locked ? ' disabled title="สิทธิ์ของผู้ดูแลระบบถูกล็อกไว้"' : ''}>
+                ${esc(LEVEL_TEXT[level] ?? level)}</button></td>`;
+          }).join('')}
+        </tr>`).join('');
+        setSummary(roleSummary, 'กดที่ช่องเพื่อสลับ ไม่เห็น → ดูได้ → แก้ได้ → ดูได้ (ทีม) → แก้ได้ (ทีม)');
+      } catch {
+        setSummary(roleSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        roleTable.innerHTML = errorRow(5);
+      }
+    }
+
+    roleTable.addEventListener('click', async event => {
+      const cell = event.target.closest('.level-cell');
+      if (!cell || cell.disabled) return;
+      const next = LEVEL_CYCLE[(LEVEL_CYCLE.indexOf(cell.dataset.level) + 1) % LEVEL_CYCLE.length];
+      const label = cell.textContent;
+      cell.disabled = true;
+      try {
+        const response = await fetch('/api/role-permissions', {
+          method:'PATCH', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ role: cell.dataset.role, pageKey: cell.dataset.pageKey, level: next })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) { setSummary(roleSummary, result.error ?? 'บันทึกไม่สำเร็จ', true); return; }
+        cell.dataset.level = next;
+        cell.textContent = LEVEL_TEXT[next];
+        cell.className = `level-cell ${levelClass(next)}`;
+        setSummary(roleSummary, `บันทึกแล้ว · ${cell.closest('tr').children[0].textContent.trim()} ของบทบาทนี้เป็น ${LEVEL_TEXT[next]}`);
+      } catch {
+        setSummary(roleSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+      } finally {
+        cell.disabled = false;
+        cell.textContent = cell.dataset.level ? LEVEL_TEXT[cell.dataset.level] : label;
+      }
+    });
+
     // ===== สิทธิ์ส่งรายการค่าใช้จ่าย =====
     // การ์ดนี้อยู่ข้างรายการค่าใช้จ่าย กดแล้วมีผลทันที ไม่มีปุ่มบันทึกแยก
     function loadPermissions() {
@@ -2772,8 +3043,53 @@
       reports: () => [loadReport()],
       pay: () => [loadPayroll(), loadOt()],
       advance: () => [loadEntryList()],
-      expenses: () => [loadClaims(), loadPermissions()]
+      expenses: () => [loadClaims(), loadPermissions()],
+      admins: () => [loadAdmins()],
+      roles: () => [loadRoleMatrix()]
     };
+
+    // ===== ตัวตนและสิทธิ์ของคนที่ล็อกอินอยู่ =====
+    // เมนูที่ซ่อนเป็นเพียงความสะดวก ฝั่ง API ตรวจสิทธิ์ซ้ำทุกครั้งอยู่แล้ว
+    let me = null;
+    const PAGE_PERMISSION = {
+      overview:'overview', employees:'employees', shifts:'shifts', schedule:'schedule', leaves:'leaves',
+      logs:'logs', missing:'missing', reports:'reports', pay:'pay', advance:'advance',
+      expenses:'expenses', settings:'settings', admins:'admins', roles:'admins'
+    };
+    const ROLE_BADGE = {
+      admin:['#d7f2e3','#0b5f38'], hr:['#e3f2fd','#01579b'],
+      finance:['#fff3cd','#7a4f01'], lead:['#ede7f6','#4527a0']
+    };
+    const allowed = key => me ? (me.permissions?.[key] ?? 'none') !== 'none' : true;
+    const writable = key => me ? ['edit','editTeam'].includes(me.permissions?.[key] ?? 'none') : true;
+
+    async function loadMe() {
+      try {
+        me = await fetch('/api/me').then(r => r.ok ? r.json() : null);
+      } catch { me = null; }
+      if (!me) return;
+      meName.textContent = me.via_api_key ? 'เครื่องมือ' : me.name.split(' ')[0];
+      meNameFull.textContent = me.name;
+      meEmail.textContent = me.email;
+      meRole.textContent = me.role_label;
+      const [background, color] = ROLE_BADGE[me.role] ?? ['#eceff1','#546e7a'];
+      meRole.style.background = background;
+      meRole.style.color = color;
+      // ซ่อนเมนูที่บทบาทนี้ไม่มีสิทธิ์เห็น
+      for (const link of document.querySelectorAll('.nav-link[data-page]')) {
+        link.classList.toggle('d-none', !allowed(PAGE_PERMISSION[link.dataset.page] ?? link.dataset.page));
+      }
+      // ปุ่มเพิ่มข้อมูลต้องหายไปถ้าดูได้อย่างเดียว
+      addEmployeeBtn.dataset.needWrite = 'employees';
+      addShiftBtn.dataset.needWrite = 'shifts';
+      for (const button of [addDeptBtn, addSiteBtn, addTypeBtn]) button.dataset.needWrite = 'settings';
+      route();
+    }
+
+    logoutBtn.addEventListener('click', async () => {
+      await fetch('/auth/logout', { method:'POST' }).catch(() => {});
+      location.href = '/login';
+    });
 
     async function refreshActivePage() {
       const label = refreshBtn.innerHTML;
@@ -2809,6 +3125,7 @@
     entryDate.value = bangkokToday();
     applyFinanceMonth();
     route();
+    loadMe();
     fetch('/api/leaves/types').then(r => r.json()).then(types => { leaveTypes = types; renderLeaveControls(); }).catch(() => {});
     loadDashboard();
     loadDaySchedule();

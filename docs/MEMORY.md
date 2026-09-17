@@ -168,6 +168,18 @@
 
 ทุกเส้นทางต้องส่ง `ADMIN_API_KEY` ยกเว้น `/health` และ `/webhooks/line`
 
+## ระบบบัญชีผู้ดูแล
+
+- ตาราง `admins` `admin_sessions` `password_resets` `role_permissions` `audit_log` · หน้า `public/login.html` (login / register / forgot / reset อยู่ในไฟล์เดียว สลับด้วย hash และ `?token=`)
+- รหัสผ่านใช้ **`crypto.scrypt` ของ Node** ไม่ใช่ bcrypt ตามที่เอกสารออกแบบเสนอ เพราะ bcrypt/argon2 ต้องคอมไพล์ native module บน alpine ซึ่งพังบ่อย scrypt เป็น memory-hard และ OWASP แนะนำเหมือนกัน รูปแบบที่เก็บคือ `scrypt$N$r$p$salt$hash` ขยับพารามิเตอร์ขึ้นได้โดยของเก่ายังอ่านได้
+- session เก็บเป็น sha256 ของ token ไม่ได้เก็บตัว token · cookie `HttpOnly; Secure; SameSite=Lax` · ปิดบัญชีหรือเปลี่ยนบทบาทแล้วลบ session ทิ้งทันที
+- `findSession()` เช็ก `status='active'` ทุกครั้ง ไม่ได้เช็กแค่ตอนล็อกอิน
+- **บังคับสิทธิ์ที่ `preHandler` hook** ด้วย `ROUTE_PERMISSIONS` เรียงจากเฉพาะเจาะจงไปกว้าง เส้นทางที่ไม่อยู่ในตารางถือเป็นของผู้ดูแลระบบ (fail closed) · `PATCH /api/employees/:id` ที่ส่งมาแค่ `canSubmitExpense` ใช้สิทธิ์ `expensePermission` แทน `employees` เพราะฝ่ายการเงินแก้ข้อมูลพนักงานไม่ได้แต่เปิดปิดสิทธิ์นี้ได้
+- หัวหน้าแผนก: hook เขียนทับ `query.departmentId` ด้วยแผนกจาก session เสมอ และตั้ง `request.teamDepartmentId` ให้ `/api/employees` กรองเอง ยิงข้ามแผนกไม่ได้
+- สิทธิ์ของ role `admin` ถูก hardcode เป็น edit ทั้งหมดใน `loadPermissions()` และ API ปฏิเสธการแก้แถวของ admin กันการล็อกตัวเองออกถาวร
+- **บั๊กที่เจอตอนเทสต์**: `POST` ที่ประกาศ `Content-Type: application/json` แต่ไม่มี body ถูก content-type parser ตีเป็น JSON เสีย ตอบ 400 ก่อนถึง handler ทำให้ออกจากระบบไม่ได้ แก้โดยให้ body ว่างเป็น `{}`
+- ไม่มีช่องทางอีเมลในระบบ ทุกการแจ้ง (ลิงก์ตั้งรหัสผ่าน คำขอใหม่ ผลอนุมัติ) ส่งผ่าน **LINE push** ถ้าบัญชีนั้นผูก `line_user_id` ไว้ ถ้าไม่ได้ผูก ลิงก์ตั้งรหัสผ่านจะไปอยู่ใน log แทน
+
 ## ข้อควรระวังเชิงเทคนิค
 
 - Webhook ต้องใช้ request body ดิบในการตรวจ signature ห้ามเปลี่ยน parser JSON โดยไม่คง raw body ไว้

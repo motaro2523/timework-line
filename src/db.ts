@@ -129,6 +129,67 @@ export async function initializeDatabase() {
     -- สิทธิ์ส่งรายการค่าใช้จ่าย ผู้ดูแลเปิดให้เป็นรายคน
     ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_submit_expense BOOLEAN NOT NULL DEFAULT FALSE;
     -- รายการค่าใช้จ่ายที่พนักงานส่งเข้ามา ต้องผ่านการอนุมัติเหมือน OT
+    -- ===== บัญชีผู้ดูแลระบบ =====
+    -- line_user_id ใช้ส่งลิงก์ตั้งรหัสผ่านและแจ้งผลอนุมัติ เพราะระบบนี้ไม่มีช่องทางอีเมล
+    CREATE TABLE IF NOT EXISTS admins (
+      id BIGSERIAL PRIMARY KEY,
+      email VARCHAR(160) UNIQUE NOT NULL,
+      name VARCHAR(160) NOT NULL,
+      phone VARCHAR(20),
+      password_hash TEXT,
+      role VARCHAR(20) NOT NULL DEFAULT 'hr' CHECK (role IN ('admin','hr','finance','lead')),
+      requested_role VARCHAR(20) CHECK (requested_role IN ('admin','hr','finance','lead')),
+      department_id BIGINT REFERENCES departments(id) ON DELETE SET NULL,
+      line_user_id VARCHAR(64),
+      status VARCHAR(10) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','active','disabled','rejected')),
+      request_note VARCHAR(160),
+      failed_attempts SMALLINT NOT NULL DEFAULT 0,
+      locked_until TIMESTAMPTZ,
+      last_login_at TIMESTAMPTZ,
+      approved_by BIGINT REFERENCES admins(id) ON DELETE SET NULL,
+      approved_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS admins_status_idx ON admins(status);
+
+    CREATE TABLE IF NOT EXISTS admin_sessions (
+      token_hash TEXT PRIMARY KEY,
+      admin_id BIGINT NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      user_agent VARCHAR(200),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS admin_sessions_admin_idx ON admin_sessions(admin_id);
+    CREATE INDEX IF NOT EXISTS admin_sessions_expiry_idx ON admin_sessions(expires_at);
+
+    CREATE TABLE IF NOT EXISTS password_resets (
+      token_hash TEXT PRIMARY KEY,
+      admin_id BIGINT NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- ตารางสิทธิ์แก้ได้จากหน้าเว็บ จึงเก็บในฐานข้อมูลแทนการฝังค่าคงที่ในโค้ด
+    CREATE TABLE IF NOT EXISTS role_permissions (
+      role VARCHAR(20) NOT NULL CHECK (role IN ('admin','hr','finance','lead')),
+      page_key VARCHAR(40) NOT NULL,
+      level VARCHAR(10) NOT NULL CHECK (level IN ('none','view','edit','viewTeam','editTeam')),
+      PRIMARY KEY (role, page_key)
+    );
+
+    -- บันทึกทุกการอนุมัติ จ่ายเงิน และเปลี่ยนสิทธิ์ ไว้ย้อนดูว่าใครทำอะไรเมื่อไร
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id BIGSERIAL PRIMARY KEY,
+      admin_id BIGINT REFERENCES admins(id) ON DELETE SET NULL,
+      admin_email VARCHAR(160),
+      action VARCHAR(60) NOT NULL,
+      target VARCHAR(120),
+      detail JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS audit_log_created_idx ON audit_log(created_at DESC);
+
     CREATE TABLE IF NOT EXISTS expense_claims (
       id BIGSERIAL PRIMARY KEY,
       employee_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
@@ -166,6 +227,38 @@ export async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS time_logs_employee_time_idx
       ON time_logs(employee_id, occurred_at DESC);
   `);
+
+  // ค่าเริ่มต้นของตารางสิทธิ์ ตามที่ตกลงกันในเอกสารออกแบบ ใส่ให้เฉพาะตอนตารางยังว่าง
+  // ผู้ดูแลระบบแก้ทีหลังได้จากหน้า สิทธิ์ตามบทบาท แล้วค่าที่แก้จะไม่ถูกเขียนทับ
+  const permissionCount = await db.query('SELECT count(*)::int AS total FROM role_permissions');
+  if (permissionCount.rows[0].total === 0) {
+    const defaults: [string, string, string, string, string][] = [
+      // page_key,           admin,  hr,     finance, lead
+      ['overview',          'edit', 'edit', 'view',  'viewTeam'],
+      ['employees',         'edit', 'edit', 'view',  'viewTeam'],
+      ['shifts',            'edit', 'edit', 'none',  'view'],
+      ['schedule',          'edit', 'edit', 'none',  'editTeam'],
+      ['leaves',            'edit', 'edit', 'none',  'editTeam'],
+      ['logs',              'edit', 'edit', 'view',  'viewTeam'],
+      ['missing',           'edit', 'edit', 'none',  'editTeam'],
+      ['ot',                'edit', 'edit', 'view',  'editTeam'],
+      ['reports',           'edit', 'view', 'view',  'viewTeam'],
+      ['pay',               'edit', 'view', 'edit',  'none'],
+      ['advance',           'edit', 'none', 'edit',  'none'],
+      ['expenses',          'edit', 'view', 'edit',  'viewTeam'],
+      ['expensePermission', 'edit', 'edit', 'edit',  'none'],
+      ['settings',          'edit', 'view', 'edit',  'none'],
+      ['admins',            'edit', 'none', 'none',  'none']
+    ];
+    for (const [pageKey, admin, hr, finance, lead] of defaults) {
+      for (const [role, level] of [['admin', admin], ['hr', hr], ['finance', finance], ['lead', lead]]) {
+        await db.query(
+          'INSERT INTO role_permissions (role, page_key, level) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+          [role, pageKey, level]
+        );
+      }
+    }
+  }
 
   // ระบบใหม่จะได้กะเริ่มต้นไว้ใช้ทันที ผู้ดูแลแก้ชื่อและเวลาได้จากหน้ากะการทำงาน
   await db.query(`

@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>เข้าสู่ระบบ · TimeWork</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; font-family:'Noto Sans Thai','Segoe UI',system-ui,sans-serif; color:#263238; background:#fff; }
+    .shell { display:flex; flex-wrap:wrap; min-height:100vh; }
+    .brand-side { flex:1 1 340px; min-width:300px; background:linear-gradient(160deg,#075a35,#0a8a4c);
+      color:#fff; padding:44px 40px; display:flex; flex-direction:column; justify-content:space-between; gap:36px; }
+    .brand-side .lead-copy { max-width:380px; font-size:26px; font-weight:700; line-height:1.45; text-wrap:pretty; }
+    .brand-side .point { font-size:14.5px; color:rgba(255,255,255,.9); }
+    .brand-side .foot { font-size:12.5px; color:rgba(255,255,255,.88); }
+    .form-side { flex:1 1 420px; min-width:300px; display:flex; align-items:center; justify-content:center; padding:48px 40px; }
+    .form-box { width:100%; max-width:480px; display:flex; flex-direction:column; gap:18px; }
+    .form-box label { font-size:13px; font-weight:500; color:#546e7a; margin-bottom:6px; }
+    .form-box .form-control, .form-box .form-select { border:1px solid #dbe3ea; border-radius:11px; padding:12px 13px; font-size:15px; }
+    .form-box .form-control:focus, .form-box .form-select:focus { border-color:#087e45; box-shadow:0 0 0 .2rem rgba(8,126,69,.15); }
+    .btn-main { background:#087e45; color:#fff; font-size:16px; font-weight:700; border-radius:12px; padding:14px; border:0; width:100%; }
+    .btn-main:hover:not(:disabled) { background:#075a35; color:#fff; }
+    .btn-main:disabled { opacity:.65; }
+    .btn-soft { border:1px solid #dbe3ea; background:#fff; color:#37474f; border-radius:12px; padding:12px; font-weight:600; }
+    .link-green { color:#087e45; font-weight:600; text-decoration:none; }
+    .link-green:hover { text-decoration:underline; }
+    .alert-box { background:#fdecea; border:1px solid #f7cdc8; color:#b3261e; border-radius:12px; padding:11px 13px; font-size:13.5px; }
+    .pw-wrap { position:relative; }
+    .pw-wrap .form-control { padding-right:44px; }
+    .pw-toggle { position:absolute; right:6px; top:50%; transform:translateY(-50%); width:34px; height:34px;
+      border:0; background:transparent; color:#90a4ae; border-radius:8px; }
+    .meter { height:6px; border-radius:6px; background:#eceff1; overflow:hidden; flex:1; }
+    .meter span { display:block; height:100%; width:0; border-radius:6px; transition:width .2s, background .2s; }
+    .meter-label { font-size:12.5px; font-weight:600; min-width:96px; text-align:right; }
+    .circle { width:62px; height:62px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:26px; }
+    .grid-2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; }
+    @media (max-width: 767.98px) { .brand-side { display:none; } .form-side { padding:32px 20px; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="brand-side">
+      <div>
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-clock-history" style="font-size:24px"></i>
+          <span style="font-size:24px;font-weight:700">TimeWork</span>
+        </div>
+        <div style="font-size:13.5px;color:rgba(255,255,255,.9)">ระบบจัดการเวลาทำงานและค่าตอบแทน</div>
+      </div>
+      <div>
+        <div class="lead-copy">ลงเวลา ตารางกะ ค่าตอบแทน และค่าใช้จ่าย รวมอยู่ในที่เดียว</div>
+        <div class="d-flex flex-column gap-2 mt-4">
+          <div class="point"><i class="bi bi-geo-alt-fill me-2"></i>ลงเวลาพร้อมพิกัด GPS ผ่าน LINE</div>
+          <div class="point"><i class="bi bi-cash-coin me-2"></i>คิดค่าแรง OT และหักสายอัตโนมัติ</div>
+          <div class="point"><i class="bi bi-receipt me-2"></i>อนุมัติค่าใช้จ่ายที่พนักงานส่งมา</div>
+        </div>
+      </div>
+      <div class="foot">สำหรับผู้ดูแลระบบเท่านั้น · พนักงานใช้งานผ่าน LINE</div>
+    </aside>
+
+    <main class="form-side">
+      <div class="form-box">
+        <div id="errorBox" class="alert-box d-none"><i class="bi bi-exclamation-circle-fill me-2"></i><span id="errorText"></span></div>
+
+        <!-- เข้าสู่ระบบ -->
+        <form id="viewLogin" class="d-flex flex-column gap-3">
+          <div>
+            <h1 style="font-size:22px;font-weight:700" class="mb-1">เข้าสู่ระบบผู้ดูแล</h1>
+            <div style="font-size:13.5px;color:#607d8b">ใช้อีเมลและรหัสผ่านที่ได้รับอนุมัติแล้ว</div>
+          </div>
+          <div>
+            <label for="loginEmail">อีเมล</label>
+            <input class="form-control" type="email" id="loginEmail" autocomplete="username" placeholder="admin@company.co.th">
+          </div>
+          <div>
+            <label for="loginPassword">รหัสผ่าน</label>
+            <div class="pw-wrap">
+              <input class="form-control" type="password" id="loginPassword" autocomplete="current-password" placeholder="••••••••">
+              <button class="pw-toggle" type="button" data-toggle-pw="loginPassword" aria-label="สลับการแสดงรหัสผ่าน"><i class="bi bi-eye"></i></button>
+            </div>
+          </div>
+          <div class="d-flex justify-content-between align-items-center" style="font-size:13.5px">
+            <label class="d-flex align-items-center gap-2 mb-0" style="font-size:13.5px;color:#37474f">
+              <input type="checkbox" id="loginRemember" style="width:17px;height:17px;accent-color:#087e45" checked>
+              จดจำการเข้าสู่ระบบ 30 วัน
+            </label>
+            <a href="#forgot" class="link-green" data-go="forgot">ลืมรหัสผ่าน?</a>
+          </div>
+          <button class="btn-main" type="submit" id="loginBtn">เข้าสู่ระบบ</button>
+          <div class="text-center" style="font-size:13.5px;color:#607d8b">
+            ยังไม่มีบัญชี? <a href="#register" class="link-green" data-go="register">ส่งคำขอใช้งาน</a>
+          </div>
+          <hr style="border-color:#eceff1">
+          <div class="text-center" style="font-size:12.5px;color:#607d8b">
+            TimeWork · เข้ารหัสรหัสผ่านด้วย scrypt · ปิดบัญชีอัตโนมัติเมื่อกรอกผิดเกินกำหนด
+          </div>
+        </form>
+
+        <!-- สมัครใช้งาน -->
+        <form id="viewRegister" class="d-none flex-column gap-3">
+          <div>
+            <h1 style="font-size:22px;font-weight:700" class="mb-1">สมัครใช้งานระบบ</h1>
+            <div style="font-size:13.5px;color:#607d8b">กรอกข้อมูลเพื่อขอสิทธิ์ ผู้ดูแลระบบจะตรวจและอนุมัติก่อนเข้าใช้งาน</div>
+          </div>
+          <div class="grid-2">
+            <div><label for="regName">ชื่อ-นามสกุล</label><input class="form-control" id="regName" maxlength="160" placeholder="สมชาย ใจดี"></div>
+            <div><label for="regPhone">เบอร์โทร</label><input class="form-control" id="regPhone" inputmode="tel" maxlength="20" placeholder="081-234-5678"></div>
+          </div>
+          <div><label for="regEmail">อีเมลที่ใช้เข้าระบบ</label><input class="form-control" type="email" id="regEmail" autocomplete="username" placeholder="somchai@company.co.th"></div>
+          <div class="grid-2">
+            <div>
+              <label for="regPassword">รหัสผ่าน</label>
+              <div class="pw-wrap">
+                <input class="form-control" type="password" id="regPassword" autocomplete="new-password" placeholder="อย่างน้อย 8 ตัวอักษร">
+                <button class="pw-toggle" type="button" data-toggle-pw="regPassword" aria-label="สลับการแสดงรหัสผ่าน"><i class="bi bi-eye"></i></button>
+              </div>
+            </div>
+            <div><label for="regConfirm">ยืนยันรหัสผ่าน</label><input class="form-control" type="password" id="regConfirm" autocomplete="new-password" placeholder="พิมพ์อีกครั้ง"></div>
+          </div>
+          <div class="d-flex align-items-center gap-3">
+            <div class="meter"><span id="pwMeterBar"></span></div>
+            <div class="meter-label" id="pwMeterLabel" style="color:#b0bec5">ยังว่าง</div>
+          </div>
+          <div>
+            <label for="regRole">สิทธิ์ที่ขอใช้งาน</label>
+            <select class="form-select" id="regRole">
+              <option value="admin">ผู้ดูแลระบบ · จัดการได้ทุกอย่าง</option>
+              <option value="hr" selected>ฝ่ายบุคคล · พนักงาน เวลา การลา</option>
+              <option value="finance">การเงิน · อนุมัติค่าใช้จ่าย จ่ายเงิน</option>
+              <option value="lead">หัวหน้าแผนก · เห็นเฉพาะทีมตัวเอง</option>
+            </select>
+          </div>
+          <div><label for="regNote">ข้อความถึงผู้อนุมัติ</label><input class="form-control" id="regNote" maxlength="160" placeholder="เช่น ดูแลงานบุคคลของสาขาโคราช"></div>
+          <label class="d-flex align-items-start gap-2 mb-0" style="font-size:13.5px;color:#37474f">
+            <input type="checkbox" id="regAgree" style="width:17px;height:17px;accent-color:#087e45;flex-shrink:0;margin-top:2px">
+            ยอมรับว่าข้อมูลพนักงานในระบบเป็นข้อมูลส่วนบุคคล และจะใช้เพื่องานขององค์กรเท่านั้น
+          </label>
+          <button class="btn-main" type="submit" id="registerBtn">ส่งคำขอใช้งาน</button>
+          <div class="text-center" style="font-size:13.5px;color:#607d8b">
+            มีบัญชีอยู่แล้ว <a href="#login" class="link-green" data-go="login">เข้าสู่ระบบ</a>
+          </div>
+        </form>
+
+        <!-- ลืมรหัสผ่าน -->
+        <form id="viewForgot" class="d-none flex-column gap-3">
+          <div>
+            <h1 style="font-size:22px;font-weight:700" class="mb-1">ลืมรหัสผ่าน</h1>
+            <div style="font-size:13.5px;color:#607d8b">กรอกอีเมลที่ใช้เข้าระบบ เราจะส่งลิงก์ตั้งรหัสผ่านใหม่ให้ทาง LINE</div>
+          </div>
+          <div><label for="forgotEmail">อีเมลที่ใช้เข้าระบบ</label><input class="form-control" type="email" id="forgotEmail" autocomplete="username" placeholder="admin@company.co.th"></div>
+          <button class="btn-main" type="submit" id="forgotBtn">ส่งลิงก์ตั้งรหัสผ่านใหม่</button>
+          <div class="text-center"><a href="#login" class="link-green" data-go="login">ย้อนกลับไปเข้าสู่ระบบ</a></div>
+        </form>
+
+        <!-- ตั้งรหัสผ่านใหม่ -->
+        <form id="viewReset" class="d-none flex-column gap-3">
+          <div>
+            <h1 style="font-size:22px;font-weight:700" class="mb-1">ตั้งรหัสผ่านใหม่</h1>
+            <div style="font-size:13.5px;color:#607d8b" id="resetSubtitle">กำลังตรวจลิงก์...</div>
+          </div>
+          <div>
+            <label for="resetPassword">รหัสผ่านใหม่</label>
+            <div class="pw-wrap">
+              <input class="form-control" type="password" id="resetPassword" autocomplete="new-password" placeholder="อย่างน้อย 8 ตัวอักษร">
+              <button class="pw-toggle" type="button" data-toggle-pw="resetPassword" aria-label="สลับการแสดงรหัสผ่าน"><i class="bi bi-eye"></i></button>
+            </div>
+          </div>
+          <div><label for="resetConfirm">ยืนยันรหัสผ่านใหม่</label><input class="form-control" type="password" id="resetConfirm" autocomplete="new-password" placeholder="พิมพ์อีกครั้ง"></div>
+          <button class="btn-main" type="submit" id="resetBtn">บันทึกรหัสผ่านใหม่</button>
+          <div class="text-center"><a href="#login" class="link-green" data-go="login">ย้อนกลับไปเข้าสู่ระบบ</a></div>
+        </form>
+
+        <!-- สำเร็จ -->
+        <div id="viewDone" class="d-none flex-column align-items-center text-center gap-3">
+          <div class="circle" id="doneIcon"></div>
+          <div style="font-size:19px;font-weight:700" id="doneTitle"></div>
+          <div style="font-size:14px;color:#607d8b;max-width:330px" id="doneText"></div>
+          <button class="btn-soft w-100" type="button" data-go="login">กลับไปหน้าเข้าสู่ระบบ</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+    const VIEWS = ['login','register','forgot','reset','done'];
+    let resetToken = '';
+
+    function showView(name) {
+      for (const view of VIEWS) {
+        const element = $(`view${view[0].toUpperCase()}${view.slice(1)}`);
+        element.classList.toggle('d-none', view !== name);
+        element.classList.toggle('d-flex', view === name && view !== 'login');
+      }
+      $('viewLogin').classList.toggle('d-flex', name === 'login');
+      clearError();
+      document.title = ({ login:'เข้าสู่ระบบ', register:'สมัครใช้งาน', forgot:'ลืมรหัสผ่าน', reset:'ตั้งรหัสผ่านใหม่', done:'TimeWork' })[name] + ' · TimeWork';
+    }
+    const showError = text => { $('errorText').textContent = text; $('errorBox').classList.remove('d-none'); };
+    const clearError = () => $('errorBox').classList.add('d-none');
+
+    function showDone(icon, background, color, title, text) {
+      $('doneIcon').innerHTML = `<i class="bi ${icon}"></i>`;
+      $('doneIcon').style.background = background;
+      $('doneIcon').style.color = color;
+      $('doneTitle').textContent = title;
+      $('doneText').textContent = text;
+      showView('done');
+    }
+
+    document.addEventListener('click', event => {
+      const go = event.target.closest('[data-go]');
+      if (go) { event.preventDefault(); showView(go.dataset.go); return; }
+      const toggle = event.target.closest('[data-toggle-pw]');
+      if (toggle) {
+        const field = $(toggle.dataset.togglePw);
+        const showing = field.type === 'text';
+        field.type = showing ? 'password' : 'text';
+        toggle.innerHTML = `<i class="bi ${showing ? 'bi-eye' : 'bi-eye-slash'}"></i>`;
+      }
+    });
+
+    // แถบความแข็งแรงนับจาก 4 เงื่อนไข ยาวพอ ตัวพิมพ์ใหญ่ ตัวเลข และอักขระพิเศษ
+    const METER = [
+      { label:'ยังว่าง', color:'#b0bec5', width:'0%' },
+      { label:'อ่อนมาก', color:'#c62828', width:'25%' },
+      { label:'พอใช้',   color:'#ef6c00', width:'50%' },
+      { label:'ดี',      color:'#0277bd', width:'75%' },
+      { label:'แข็งแรง', color:'#087e45', width:'100%' }
+    ];
+    $('regPassword').addEventListener('input', event => {
+      const value = event.target.value;
+      const score = value ? [value.length >= 8, /[A-Z]/.test(value), /\d/.test(value), /[^A-Za-z0-9]/.test(value)]
+        .filter(Boolean).length : 0;
+      const step = METER[score];
+      $('pwMeterBar').style.width = step.width;
+      $('pwMeterBar').style.background = step.color;
+      $('pwMeterLabel').textContent = step.label;
+      $('pwMeterLabel').style.color = step.color;
+    });
+
+    async function send(url, body, button, label) {
+      button.disabled = true;
+      const original = button.textContent;
+      button.textContent = label;
+      try {
+        const response = await fetch(url, {
+          method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body)
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) { showError(data.error ?? 'ทำรายการไม่สำเร็จ'); return null; }
+        return data;
+      } catch {
+        showError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
+        return null;
+      } finally {
+        button.disabled = false;
+        button.textContent = original;
+      }
+    }
+
+    const emailOk = value => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
+
+    $('viewLogin').addEventListener('submit', async event => {
+      event.preventDefault();
+      clearError();
+      const email = $('loginEmail').value.trim();
+      const password = $('loginPassword').value;
+      if (!email || !password) return showError('กรุณากรอกอีเมลและรหัสผ่านให้ครบ');
+      if (!emailOk(email)) return showError('รูปแบบอีเมลไม่ถูกต้อง');
+      const data = await send('/auth/login', { email, password, remember: $('loginRemember').checked }, $('loginBtn'), 'กำลังเข้าสู่ระบบ...');
+      if (data) location.href = '/';
+    });
+
+    $('viewRegister').addEventListener('submit', async event => {
+      event.preventDefault();
+      clearError();
+      const name = $('regName').value.trim();
+      const email = $('regEmail').value.trim();
+      const password = $('regPassword').value;
+      if (!name || !email || !password) return showError('กรุณากรอกชื่อ อีเมล และรหัสผ่าน');
+      if (!emailOk(email)) return showError('รูปแบบอีเมลไม่ถูกต้อง');
+      if (password.length < 8) return showError('รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร');
+      if (password !== $('regConfirm').value) return showError('รหัสผ่านทั้งสองช่องไม่ตรงกัน');
+      if (!$('regAgree').checked) return showError('กรุณายอมรับเงื่อนไขการใช้ข้อมูลส่วนบุคคล');
+      const data = await send('/auth/register', {
+        name, email, password, phone: $('regPhone').value.trim(),
+        role: $('regRole').value, note: $('regNote').value.trim()
+      }, $('registerBtn'), 'กำลังส่งคำขอ...');
+      if (data) showDone('bi-hourglass-split', '#d7f2e3', '#0b5f38', 'ส่งคำขอเรียบร้อย รออนุมัติ',
+        `ผู้ดูแลระบบจะตรวจคำขอและกำหนดสิทธิ์ให้ เมื่ออนุมัติแล้วจะแจ้งกลับไปที่ ${email} หรือทาง LINE โดยปกติภายใน 1 วันทำการ`);
+    });
+
+    $('viewForgot').addEventListener('submit', async event => {
+      event.preventDefault();
+      clearError();
+      const email = $('forgotEmail').value.trim();
+      if (!email) return showError('กรุณากรอกอีเมลที่ใช้เข้าระบบ');
+      const data = await send('/auth/forgot', { email }, $('forgotBtn'), 'กำลังส่ง...');
+      if (data) showDone('bi-envelope-check', '#e3f2fd', '#0277bd', 'ส่งลิงก์ตั้งรหัสผ่านใหม่แล้ว',
+        `ตรวจข้อความใน LINE ของบัญชี ${email} ลิงก์ใช้ได้ 30 นาที ถ้าไม่ได้รับให้ติดต่อผู้ดูแลระบบ`);
+    });
+
+    $('viewReset').addEventListener('submit', async event => {
+      event.preventDefault();
+      clearError();
+      const password = $('resetPassword').value;
+      if (password.length < 8) return showError('รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร');
+      if (password !== $('resetConfirm').value) return showError('รหัสผ่านทั้งสองช่องไม่ตรงกัน');
+      const data = await send('/auth/reset', { token: resetToken, password }, $('resetBtn'), 'กำลังบันทึก...');
+      if (data) showDone('bi-check-circle', '#d7f2e3', '#0b5f38', 'ตั้งรหัสผ่านใหม่เรียบร้อย',
+        'เข้าสู่ระบบด้วยรหัสผ่านใหม่ได้เลย อุปกรณ์อื่นที่ค้างอยู่ถูกออกจากระบบทั้งหมดแล้ว');
+    });
+
+    (async () => {
+      resetToken = new URLSearchParams(location.search).get('token') ?? '';
+      if (resetToken) {
+        showView('reset');
+        const response = await fetch('/auth/reset/check', {
+          method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ token: resetToken })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          $('resetSubtitle').textContent = 'ลิงก์นี้ใช้ไม่ได้แล้ว';
+          showError(data.error ?? 'ลิงก์หมดอายุหรือถูกใช้ไปแล้ว');
+          $('resetBtn').disabled = true;
+          return;
+        }
+        $('resetSubtitle').textContent = `ตั้งรหัสผ่านใหม่สำหรับ ${data.email}`;
+        return;
+      }
+      const requested = location.hash.replace('#','');
+      showView(['register','forgot'].includes(requested) ? requested : 'login');
+    })();
+  </script>
+</body>
+</html>

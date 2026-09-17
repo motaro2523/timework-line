@@ -4,10 +4,17 @@ import Fastify, { type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { db, initializeDatabase } from './db.js';
 import { removeExpensePhoto, saveExpensePhoto, sendPhoto } from './photos.js';
+import {
+  type AdminIdentity, type Level, LEVELS, PAGE_KEYS, PAGE_LABELS, ROLES, ROLE_LABELS,
+  SESSION_COOKIE, canRead, canWrite, clearSessionCookie, findSession, hashPassword, hashToken,
+  isTeamOnly, loadPermissions, newToken, parseCookies, sessionCookie, verifyPassword, writeAudit
+} from './auth.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
     rawBody?: Buffer;
+    admin?: AdminIdentity;
+    teamDepartmentId?: string;
   }
 }
 
@@ -17,6 +24,8 @@ const port = Number(process.env.PORT ?? 3000);
 app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (request, body, done) => {
   const rawBody = Buffer.isBuffer(body) ? body : Buffer.from(body);
   request.rawBody = rawBody;
+  // POST ที่ไม่มีเนื้อความ เช่น ออกจากระบบ ถือว่าเป็นอ็อบเจกต์ว่าง ไม่ใช่ JSON เสีย
+  if (!rawBody.length) return done(null, {});
   try {
     done(null, JSON.parse(rawBody.toString('utf8')));
   } catch {
@@ -47,33 +56,303 @@ function presentedAdminKey(request: FastifyRequest) {
   return null;
 }
 
+// ผู้ใช้จริงเข้าด้วยบัญชีและรหัสผ่าน ส่วน x-admin-key เก็บไว้ให้สคริปต์และการตรวจสอบระบบ
+// โดยถือเป็นสิทธิ์ระดับผู้ดูแลระบบเต็ม ตามที่เอกสารออกแบบกำหนด
+const API_KEY_IDENTITY = (): AdminIdentity => ({
+  id: '0', email: 'x-admin-key', name: 'เครื่องมืออัตโนมัติ', role: 'admin',
+  departmentId: null,
+  permissions: Object.fromEntries(PAGE_KEYS.map(key => [key, 'edit' as Level])),
+  viaApiKey: true
+});
+
+// /liff ยืนยันตัวตนด้วย access token ของ LINE แทนบัญชีผู้ดูแล จึงไม่ผ่าน hook นี้
+const PUBLIC_PATHS = new Set(['/health', '/webhooks/line', '/liff', '/liff.html',
+  '/liff/pay', '/liff/advance', '/liff/expense',
+  '/api/liff/config', '/api/liff/status',
+  '/api/liff/check-in', '/api/liff/summary', '/api/liff/expenses', '/api/liff/expenses/cancel',
+  '/api/liff/expenses/photo',
+  '/login', '/login.html', '/reset',
+  '/auth/login', '/auth/logout', '/auth/register', '/auth/forgot', '/auth/reset', '/auth/reset/check']);
+
 // Registered before the static plugin so the dashboard HTML is protected too.
-// LINE keeps its own HMAC check on /webhooks/line, and /health stays open for monitoring.
 app.addHook('onRequest', async (request, reply) => {
   const pathname = request.url.split('?')[0];
-  // /liff ยืนยันตัวตนด้วย access token ของ LINE แทนคีย์ผู้ดูแล จึงไม่ผ่าน hook นี้
-  const PUBLIC_PATHS = ['/health', '/webhooks/line', '/liff', '/liff.html',
-    '/liff/pay', '/liff/advance', '/liff/expense',
-    '/api/liff/config', '/api/liff/status',
-    '/api/liff/check-in', '/api/liff/summary', '/api/liff/expenses', '/api/liff/expenses/cancel',
-    '/api/liff/expenses/photo'];
-  if (PUBLIC_PATHS.includes(pathname)) return;
-  if (!adminKey) {
-    request.log.error('ADMIN_API_KEY is not set, refusing admin requests');
-    return reply.code(503).send({ error: 'admin authentication is not configured' });
+  if (PUBLIC_PATHS.has(pathname)) return;
+
+  const token = parseCookies(request.headers.cookie)[SESSION_COOKIE];
+  if (token) {
+    const identity = await findSession(token);
+    if (identity) { request.admin = identity; return; }
   }
   const provided = presentedAdminKey(request);
-  if (!provided || !safeEqual(provided, adminKey)) {
-    return reply
-      .code(401)
-      .header('WWW-Authenticate', 'Basic realm="TimeWork", charset="UTF-8"')
-      .send({ error: 'unauthorized' });
+  if (adminKey && provided && safeEqual(provided, adminKey)) {
+    request.admin = API_KEY_IDENTITY();
+    return;
+  }
+  // เรียกจากเบราว์เซอร์ให้พาไปหน้าเข้าสู่ระบบ ส่วนที่เรียก API ให้ตอบ 401 ไปตรงๆ
+  if (!pathname.startsWith('/api') && request.headers.accept?.includes('text/html')) {
+    return reply.redirect('/login');
+  }
+  return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+});
+
+// ===== บังคับสิทธิ์รายเส้นทาง =====
+// จับคู่เส้นทางกับหน้าในตารางสิทธิ์ เรียงจากเฉพาะเจาะจงไปกว้าง ตัวแรกที่ตรงคือตัวที่ใช้
+// ซ่อนเมนูฝั่งหน้าเว็บไม่ใช่การป้องกัน การตรวจจริงอยู่ตรงนี้
+const ROUTE_PERMISSIONS: [RegExp, string][] = [
+  [/^\/api\/me$/,                          ''],
+  [/^\/api\/admins/,                       'admins'],
+  [/^\/api\/role-permissions/,             'admins'],
+  [/^\/api\/permissions\/expense/,         'expensePermission'],
+  [/^\/api\/reports\/today/,               'overview'],
+  [/^\/api\/reports\//,                    'reports'],
+  [/^\/api\/employees/,                    'employees'],
+  [/^\/api\/shifts/,                       'shifts'],
+  [/^\/api\/schedules\//,                  'schedule'],
+  [/^\/api\/leaves/,                       'leaves'],
+  [/^\/api\/time-logs\/(missing|manual)/,  'missing'],
+  [/^\/api\/time-logs/,                    'logs'],
+  [/^\/api\/ot/,                           'ot'],
+  [/^\/api\/payroll\/entries/,             'advance'],
+  [/^\/api\/payroll/,                      'pay'],
+  [/^\/api\/expenses/,                     'expenses'],
+  [/^\/api\/(departments|employee-types|work-sites)/, 'settings']
+];
+const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+app.addHook('preHandler', async (request, reply) => {
+  const pathname = request.url.split('?')[0];
+  if (!pathname.startsWith('/api') || pathname.startsWith('/api/liff/')) return;
+  const identity = request.admin;
+  if (!identity) return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+
+  const match = ROUTE_PERMISSIONS.find(([pattern]) => pattern.test(pathname));
+  // เส้นทางที่ไม่ได้อยู่ในตารางถือว่าเป็นของผู้ดูแลระบบเท่านั้น ปลอดภัยกว่าปล่อยผ่าน
+  let pageKey = match ? match[1] : 'admins';
+  if (pageKey === '') return;
+
+  // แก้เฉพาะสิทธิ์ส่งค่าใช้จ่ายของพนักงาน ใช้สิทธิ์ของหน้าค่าใช้จ่ายแทนหน้าพนักงาน
+  // เพราะฝ่ายการเงินแก้ข้อมูลพนักงานไม่ได้ แต่เปิดปิดสิทธิ์นี้ได้
+  if (pageKey === 'employees' && request.method === 'PATCH') {
+    const body = request.body as Record<string, unknown> | undefined;
+    if (body && Object.keys(body).length === 1 && 'canSubmitExpense' in body) pageKey = 'expensePermission';
+  }
+
+  const level = identity.permissions[pageKey] ?? 'none';
+  if (READ_METHODS.has(request.method)) {
+    if (!canRead(level)) return reply.code(403).send({ error: 'บัญชีของคุณไม่มีสิทธิ์ดูข้อมูลส่วนนี้' });
+  } else if (!canWrite(level)) {
+    return reply.code(403).send({ error: 'บัญชีของคุณดูได้อย่างเดียว แก้ไขข้อมูลส่วนนี้ไม่ได้' });
+  }
+
+  // หัวหน้าแผนกเห็นได้เฉพาะแผนกตัวเอง บังคับค่าทับของที่ client ส่งมาเสมอ
+  // ไม่อย่างนั้นยิง ?departmentId= ข้ามแผนกได้
+  if (isTeamOnly(level)) {
+    if (!identity.departmentId) {
+      return reply.code(403).send({ error: 'บัญชีนี้ยังไม่ได้กำหนดแผนกที่ดูแล กรุณาแจ้งผู้ดูแลระบบ' });
+    }
+    const query = request.query as Record<string, unknown>;
+    if (query) query.departmentId = identity.departmentId;
+    request.teamDepartmentId = identity.departmentId;
   }
 });
 
 await app.register(fastifyStatic, { root: path.join(process.cwd(), 'public') });
 
 app.get('/health', async () => ({ status: 'ok' }));
+
+// ===== เข้าสู่ระบบ สมัคร และลืมรหัสผ่าน =====
+const BASE_URL = (process.env.PUBLIC_BASE_URL ?? 'https://timework.scriptbin.dev').replace(/\/$/, '');
+const MAX_FAILED = 5;
+const LOCK_MINUTES = 15;
+const SESSION_HOURS = 12;
+const REMEMBER_DAYS = 30;
+const RESET_MINUTES = 30;
+
+app.get('/login', async (request, reply) => reply.sendFile('login.html'));
+app.get('/reset', async (request, reply) => reply.sendFile('login.html'));
+
+// จำกัดจำนวนครั้งต่อ IP กันการเดารหัสและการยิงสมัครรัว ๆ เก็บในหน่วยความจำก็พอ
+// เพราะระบบรันอินสแตนซ์เดียวและรีสตาร์ตไม่บ่อย
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+function rateLimited(key: string, limit: number, windowMs: number) {
+  const now = Date.now();
+  const bucket = rateBuckets.get(key);
+  if (!bucket || bucket.resetAt < now) {
+    rateBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    if (rateBuckets.size > 5000) for (const [k, v] of rateBuckets) if (v.resetAt < now) rateBuckets.delete(k);
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > limit;
+}
+
+// ระบบนี้ไม่มีช่องทางอีเมล จึงแจ้งผ่าน LINE ของบัญชีนั้นแทน
+async function pushLine(userId: string | null | undefined, text: string) {
+  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (!userId || !accessToken) return false;
+  try {
+    const response = await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ to: userId, messages: [{ type: 'text', text }] })
+    });
+    if (!response.ok) app.log.warn({ status: response.status }, 'LINE push failed');
+    return response.ok;
+  } catch (error) {
+    app.log.warn({ error }, 'LINE push failed');
+    return false;
+  }
+}
+
+const normalizeEmail = (value: unknown) => String(value ?? '').trim().toLowerCase();
+const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value) && value.length <= 160;
+
+async function issueReset(adminId: string) {
+  const token = newToken();
+  await db.query('DELETE FROM password_resets WHERE admin_id = $1 AND used_at IS NULL', [adminId]);
+  await db.query(
+    `INSERT INTO password_resets (token_hash, admin_id, expires_at)
+     VALUES ($1, $2, NOW() + ($3 || ' minutes')::interval)`,
+    [hashToken(token), adminId, String(RESET_MINUTES)]
+  );
+  return `${BASE_URL}/reset?token=${token}`;
+}
+
+app.post<{ Body: { email?: string; password?: string; remember?: boolean } }>('/auth/login', async (request, reply) => {
+  const ip = request.ip;
+  if (rateLimited(`login:${ip}`, 20, 5 * 60_000)) {
+    return reply.code(429).send({ error: 'พยายามเข้าสู่ระบบบ่อยเกินไป กรุณารอสักครู่' });
+  }
+  const email = normalizeEmail(request.body?.email);
+  const password = String(request.body?.password ?? '');
+  if (!email || !password) return reply.code(400).send({ error: 'กรุณากรอกอีเมลและรหัสผ่านให้ครบ' });
+  if (!isEmail(email)) return reply.code(400).send({ error: 'รูปแบบอีเมลไม่ถูกต้อง' });
+
+  const { rows } = await db.query(
+    `SELECT id, name, email, password_hash, status, failed_attempts,
+            locked_until, (locked_until > NOW()) AS locked,
+            CEIL(EXTRACT(EPOCH FROM (locked_until - NOW())) / 60)::int AS lock_minutes
+     FROM admins WHERE email = $1`, [email]);
+  const admin = rows[0];
+  // ข้อความเดียวกันทั้งกรณีไม่มีอีเมลและรหัสผิด เพื่อไม่ให้เดาได้ว่าอีเมลไหนมีอยู่จริง
+  const wrong = { error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' };
+  if (!admin) return reply.code(401).send(wrong);
+  if (admin.locked) {
+    return reply.code(423).send({ error: `บัญชีถูกล็อกชั่วคราว กรุณาลองใหม่ในอีก ${admin.lock_minutes} นาที` });
+  }
+  if (!(await verifyPassword(password, admin.password_hash))) {
+    const failed = Number(admin.failed_attempts) + 1;
+    const shouldLock = failed >= MAX_FAILED;
+    await db.query(
+      `UPDATE admins SET failed_attempts = $2,
+              locked_until = CASE WHEN $3 THEN NOW() + ($4 || ' minutes')::interval ELSE locked_until END
+       WHERE id = $1`, [admin.id, shouldLock ? 0 : failed, shouldLock, String(LOCK_MINUTES)]);
+    if (shouldLock) {
+      return reply.code(423).send({ error: `บัญชีถูกล็อกชั่วคราว กรุณาลองใหม่ในอีก ${LOCK_MINUTES} นาที` });
+    }
+    return reply.code(401).send({ error: `อีเมลหรือรหัสผ่านไม่ถูกต้อง เหลือโอกาสอีก ${MAX_FAILED - failed} ครั้งก่อนบัญชีถูกล็อก ${LOCK_MINUTES} นาที` });
+  }
+  // ตรวจสถานะหลังตรวจรหัสผ่าน จะได้ไม่บอกคนนอกว่าอีเมลนี้มีบัญชีอยู่
+  if (admin.status === 'pending') return reply.code(403).send({ error: 'บัญชีนี้รอผู้ดูแลระบบอนุมัติ' });
+  if (admin.status !== 'active') return reply.code(403).send({ error: 'บัญชีนี้ถูกปิดการใช้งาน กรุณาติดต่อผู้ดูแลระบบ' });
+
+  const remember = Boolean(request.body?.remember);
+  const maxAge = remember ? REMEMBER_DAYS * 86400 : SESSION_HOURS * 3600;
+  const token = newToken();
+  await db.query(
+    `INSERT INTO admin_sessions (token_hash, admin_id, expires_at, user_agent)
+     VALUES ($1, $2, NOW() + ($3 || ' seconds')::interval, $4)`,
+    [hashToken(token), admin.id, String(maxAge), String(request.headers['user-agent'] ?? '').slice(0, 200)]);
+  await db.query('UPDATE admins SET failed_attempts = 0, locked_until = NULL, last_login_at = NOW() WHERE id = $1', [admin.id]);
+  await db.query('DELETE FROM admin_sessions WHERE expires_at < NOW()');
+  return reply.header('Set-Cookie', sessionCookie(token, maxAge)).send({ ok: true });
+});
+
+app.post('/auth/logout', async (request, reply) => {
+  const token = parseCookies(request.headers.cookie)[SESSION_COOKIE];
+  if (token) await db.query('DELETE FROM admin_sessions WHERE token_hash = $1', [hashToken(token)]);
+  return reply.header('Set-Cookie', clearSessionCookie()).send({ ok: true });
+});
+
+app.post<{ Body: { name?: string; phone?: string; email?: string; password?: string; role?: string; note?: string } }>('/auth/register', async (request, reply) => {
+  if (rateLimited(`register:${request.ip}`, 5, 60 * 60_000)) {
+    return reply.code(429).send({ error: 'ส่งคำขอบ่อยเกินไป กรุณาลองใหม่ภายหลัง' });
+  }
+  const name = String(request.body?.name ?? '').trim().slice(0, 160);
+  const email = normalizeEmail(request.body?.email);
+  const password = String(request.body?.password ?? '');
+  if (!name || !email || !password) return reply.code(400).send({ error: 'กรุณากรอกชื่อ อีเมล และรหัสผ่าน' });
+  if (!isEmail(email)) return reply.code(400).send({ error: 'รูปแบบอีเมลไม่ถูกต้อง' });
+  if (password.length < 8) return reply.code(400).send({ error: 'รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร' });
+  const requestedRole = ROLES.includes(String(request.body?.role ?? '') as typeof ROLES[number])
+    ? String(request.body?.role) : 'hr';
+  const phone = String(request.body?.phone ?? '').trim().slice(0, 20) || null;
+  const note = String(request.body?.note ?? '').trim().slice(0, 160) || null;
+
+  const existing = await db.query('SELECT id FROM admins WHERE email = $1', [email]);
+  // อีเมลซ้ำก็ตอบเหมือนสำเร็จ แต่ไม่สร้างแถวใหม่ กันการไล่เดาว่าใครมีบัญชีอยู่แล้ว
+  if (!existing.rowCount) {
+    // สมัครเองได้แค่สถานะรออนุมัติ บทบาทจริงมาจากคนที่กดอนุมัติเท่านั้น
+    await db.query(
+      `INSERT INTO admins (email, name, phone, password_hash, role, requested_role, request_note, status)
+       VALUES ($1, $2, $3, $4, 'hr', $5, $6, 'pending')`,
+      [email, name, phone, await hashPassword(password), requestedRole, note]);
+    const approvers = await db.query("SELECT line_user_id FROM admins WHERE role = 'admin' AND status = 'active'");
+    for (const row of approvers.rows) {
+      await pushLine(row.line_user_id, `TimeWork: มีคำขอใช้งานใหม่\n${name} (${email})\nขอสิทธิ์ ${ROLE_LABELS[requestedRole]}\nเข้าไปอนุมัติที่ ${BASE_URL}/#admins`);
+    }
+  }
+  return reply.code(201).send({ ok: true });
+});
+
+app.post<{ Body: { email?: string } }>('/auth/forgot', async (request, reply) => {
+  if (rateLimited(`forgot:${request.ip}`, 5, 60 * 60_000)) {
+    return reply.code(429).send({ error: 'ขอลิงก์บ่อยเกินไป กรุณาลองใหม่ภายหลัง' });
+  }
+  const email = normalizeEmail(request.body?.email);
+  if (!email) return reply.code(400).send({ error: 'กรุณากรอกอีเมลที่ใช้เข้าระบบ' });
+  const { rows } = await db.query(
+    "SELECT id, name, line_user_id FROM admins WHERE email = $1 AND status IN ('active','pending')", [email]);
+  if (rows.length) {
+    const link = await issueReset(String(rows[0].id));
+    const sent = await pushLine(rows[0].line_user_id,
+      `TimeWork: ลิงก์ตั้งรหัสผ่านใหม่ ใช้ได้ ${RESET_MINUTES} นาที และใช้ได้ครั้งเดียว\n${link}`);
+    // ไม่ได้ผูก LINE ก็ยังต้องมีทางไปต่อ ผู้ดูแลระบบหยิบลิงก์จาก log ให้ได้
+    if (!sent) app.log.warn({ email, link }, 'password reset link could not be pushed to LINE');
+  }
+  // ตอบสำเร็จเสมอ ไม่ว่าอีเมลนั้นจะมีอยู่หรือไม่
+  return reply.send({ ok: true });
+});
+
+app.post<{ Body: { token?: string } }>('/auth/reset/check', async (request, reply) => {
+  const token = String(request.body?.token ?? '');
+  if (!token) return reply.code(400).send({ error: 'ลิงก์ไม่ถูกต้อง' });
+  const { rows } = await db.query(
+    `SELECT a.email FROM password_resets r JOIN admins a ON a.id = r.admin_id
+     WHERE r.token_hash = $1 AND r.used_at IS NULL AND r.expires_at > NOW()`, [hashToken(token)]);
+  if (!rows.length) return reply.code(400).send({ error: 'ลิงก์หมดอายุหรือถูกใช้ไปแล้ว กรุณาขอลิงก์ใหม่' });
+  return { email: rows[0].email };
+});
+
+app.post<{ Body: { token?: string; password?: string } }>('/auth/reset', async (request, reply) => {
+  const token = String(request.body?.token ?? '');
+  const password = String(request.body?.password ?? '');
+  if (!token) return reply.code(400).send({ error: 'ลิงก์ไม่ถูกต้อง' });
+  if (password.length < 8) return reply.code(400).send({ error: 'รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร' });
+  const { rows } = await db.query(
+    `SELECT admin_id FROM password_resets
+     WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()`, [hashToken(token)]);
+  if (!rows.length) return reply.code(400).send({ error: 'ลิงก์หมดอายุหรือถูกใช้ไปแล้ว กรุณาขอลิงก์ใหม่' });
+  const adminId = rows[0].admin_id;
+  await db.query('UPDATE admins SET password_hash = $2, failed_attempts = 0, locked_until = NULL WHERE id = $1',
+    [adminId, await hashPassword(password)]);
+  await db.query('UPDATE password_resets SET used_at = NOW() WHERE token_hash = $1', [hashToken(token)]);
+  // ตั้งรหัสใหม่แล้วต้องเตะทุกอุปกรณ์ที่ค้างอยู่ออก
+  await db.query('DELETE FROM admin_sessions WHERE admin_id = $1', [adminId]);
+  return { ok: true };
+});
+
 
 const EMPLOYEE_FIELDS = `id, employee_code, name, line_user_id, active, national_id, phone,
   address, ethnicity, shift_id, employee_type_id, department_id, can_submit_expense,
@@ -233,7 +512,9 @@ function parseShift(body: ShiftInput, creating: boolean) {
   return { updates };
 }
 
-app.get('/api/employees', async () => {
+app.get('/api/employees', async request => {
+  // หัวหน้าแผนกเห็นเฉพาะคนในแผนกตัวเอง แผนกมาจาก session ไม่ใช่จาก client
+  const team = request.teamDepartmentId ?? '';
   const { rows } = await db.query(`
     SELECT e.id, e.employee_code, e.name, e.line_user_id, e.active, e.national_id, e.phone,
            e.address, e.ethnicity, e.shift_id, e.employee_type_id, e.department_id,
@@ -246,8 +527,9 @@ app.get('/api/employees', async () => {
     LEFT JOIN shifts s ON s.id = e.shift_id
     LEFT JOIN employee_types t ON t.id = e.employee_type_id
     LEFT JOIN departments d ON d.id = e.department_id
+    WHERE ($1 = '' OR e.department_id = NULLIF($1, '')::bigint)
     ORDER BY e.employee_code
-  `);
+  `, [team]);
   return rows;
 });
 
@@ -301,6 +583,160 @@ app.patch<{ Params: { id: string }; Body: { name?: string; active?: boolean; can
     if (constraint) return reply.code(constraint.status).send({ error: constraint.error });
     throw error;
   }
+});
+
+// ===== บัญชีผู้ดูแลระบบ =====
+// ทุกเส้นทางในหมวดนี้ต้องเป็นสิทธิ์ผู้ดูแลระบบ ตรวจซ้ำในตัว handler ไม่พึ่งการซ่อนเมนู
+function requireAdminsPage(request: FastifyRequest, level: 'read' | 'write') {
+  const permission = request.admin?.permissions.admins ?? 'none';
+  if (level === 'read' ? !canRead(permission) : !canWrite(permission)) return 'ไม่มีสิทธิ์จัดการผู้ดูแลระบบ';
+  return null;
+}
+
+const ADMIN_FIELDS = `id, email, name, phone, role, requested_role, department_id, line_user_id, status,
+  request_note,
+  to_char(created_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI') AS created_at,
+  to_char(last_login_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI') AS last_login_at`;
+
+app.get('/api/me', async request => {
+  const me = request.admin!;
+  return {
+    id: me.id, email: me.email, name: me.name, role: me.role, role_label: ROLE_LABELS[me.role] ?? me.role,
+    department_id: me.departmentId, via_api_key: me.viaApiKey, permissions: me.permissions
+  };
+});
+
+app.get('/api/admins', async (request, reply) => {
+  const denied = requireAdminsPage(request, 'read');
+  if (denied) return reply.code(403).send({ error: denied });
+  const { rows } = await db.query(
+    `SELECT ${ADMIN_FIELDS} FROM admins WHERE status IN ('active','disabled') ORDER BY name`);
+  return rows;
+});
+
+app.get('/api/admins/requests', async (request, reply) => {
+  const denied = requireAdminsPage(request, 'read');
+  if (denied) return reply.code(403).send({ error: denied });
+  const { rows } = await db.query(
+    `SELECT ${ADMIN_FIELDS} FROM admins WHERE status = 'pending' ORDER BY created_at`);
+  return rows;
+});
+
+app.patch<{ Params: { id: string }; Body: { status?: string; role?: string; departmentId?: string | null; lineUserId?: string | null } }>(
+  '/api/admins/:id', async (request, reply) => {
+  const denied = requireAdminsPage(request, 'write');
+  if (denied) return reply.code(403).send({ error: denied });
+  if (!/^\d+$/.test(request.params.id)) return reply.code(400).send({ error: 'รหัสอ้างอิงไม่ถูกต้อง' });
+
+  const current = await db.query('SELECT id, email, name, role, status, line_user_id FROM admins WHERE id = $1', [request.params.id]);
+  if (!current.rowCount) return reply.code(404).send({ error: 'ไม่พบบัญชีผู้ดูแล' });
+  const before = current.rows[0];
+
+  const updates: Record<string, string | null> = {};
+  if (request.body?.role !== undefined) {
+    const role = String(request.body.role);
+    if (!ROLES.includes(role as typeof ROLES[number])) return reply.code(400).send({ error: 'บทบาทไม่ถูกต้อง' });
+    updates.role = role;
+  }
+  if (request.body?.status !== undefined) {
+    const status = String(request.body.status);
+    if (!['active', 'disabled', 'rejected'].includes(status)) return reply.code(400).send({ error: 'สถานะไม่ถูกต้อง' });
+    updates.status = status;
+  }
+  if (request.body?.departmentId !== undefined) {
+    const value = String(request.body.departmentId ?? '').trim();
+    if (value && !/^\d+$/.test(value)) return reply.code(400).send({ error: 'รหัสแผนกไม่ถูกต้อง' });
+    updates.department_id = value || null;
+  }
+  if (request.body?.lineUserId !== undefined) {
+    const value = String(request.body.lineUserId ?? '').trim();
+    updates.line_user_id = value || null;
+  }
+  if (!Object.keys(updates).length) return reply.code(400).send({ error: 'ไม่มีข้อมูลที่ต้องแก้ไข' });
+
+  const nextRole = updates.role ?? before.role;
+  const nextStatus = updates.status ?? before.status;
+  // หัวหน้าแผนกต้องมีแผนกเสมอ ไม่งั้นตัวกรองของ server จะไม่มีค่าให้บังคับ
+  if (nextRole === 'lead' && nextStatus === 'active') {
+    const department = updates.department_id !== undefined
+      ? updates.department_id
+      : (await db.query('SELECT department_id FROM admins WHERE id = $1', [request.params.id])).rows[0].department_id;
+    if (!department) return reply.code(400).send({ error: 'บทบาทหัวหน้าแผนกต้องเลือกแผนกที่ดูแลด้วย' });
+  }
+  // ต้องเหลือผู้ดูแลระบบที่เปิดใช้งานอย่างน้อยหนึ่งบัญชีเสมอ
+  const losesAdmin = before.role === 'admin' && before.status === 'active'
+    && (nextRole !== 'admin' || nextStatus !== 'active');
+  if (losesAdmin) {
+    const remaining = await db.query(
+      "SELECT count(*)::int AS total FROM admins WHERE role = 'admin' AND status = 'active' AND id <> $1",
+      [request.params.id]);
+    if (remaining.rows[0].total === 0) {
+      return reply.code(400).send({ error: 'ต้องมีผู้ดูแลระบบที่เปิดใช้งานอย่างน้อย 1 บัญชี' });
+    }
+  }
+
+  const columns = Object.keys(updates);
+  const assignments = columns.map((column, index) => `${column} = $${index + 2}`).join(', ');
+  const approving = updates.status === 'active' && before.status === 'pending';
+  const { rows } = await db.query(
+    `UPDATE admins SET ${assignments}
+       ${approving ? ', approved_by = NULLIF($1, $1), approved_at = NOW()' : ''}
+     WHERE id = $1 RETURNING ${ADMIN_FIELDS}`,
+    [request.params.id, ...columns.map(column => updates[column])]);
+  if (approving && request.admin && !request.admin.viaApiKey) {
+    await db.query('UPDATE admins SET approved_by = $2 WHERE id = $1', [request.params.id, request.admin.id]);
+  }
+  // ปิดบัญชีหรือเปลี่ยนบทบาทแล้ว session ที่ค้างอยู่ต้องถูกตัดทันที
+  if (updates.status && updates.status !== 'active') {
+    await db.query('DELETE FROM admin_sessions WHERE admin_id = $1', [request.params.id]);
+  }
+  if (updates.role && updates.role !== before.role) {
+    await db.query('DELETE FROM admin_sessions WHERE admin_id = $1', [request.params.id]);
+  }
+  await writeAudit(request.admin ?? null, 'admin.update', before.email,
+    { before: { role: before.role, status: before.status }, after: { role: nextRole, status: nextStatus } });
+
+  const lineTarget = updates.line_user_id ?? before.line_user_id;
+  if (approving) {
+    await pushLine(lineTarget, `TimeWork: บัญชีของคุณได้รับอนุมัติแล้ว\nสิทธิ์ ${ROLE_LABELS[nextRole]}\nเข้าใช้งานที่ ${BASE_URL}/login`);
+  } else if (updates.status === 'rejected') {
+    await pushLine(lineTarget, 'TimeWork: คำขอใช้งานของคุณไม่ได้รับอนุมัติ กรุณาติดต่อผู้ดูแลระบบ');
+  }
+  return rows[0];
+});
+
+// ===== ตารางสิทธิ์ตามบทบาท =====
+app.get('/api/role-permissions', async (request, reply) => {
+  const denied = requireAdminsPage(request, 'read');
+  if (denied) return reply.code(403).send({ error: denied });
+  const { rows } = await db.query('SELECT role, page_key, level FROM role_permissions');
+  const matrix: Record<string, Record<string, string>> = {};
+  for (const role of ROLES) matrix[role] = Object.fromEntries(PAGE_KEYS.map(key => [key, 'none']));
+  for (const row of rows) if (matrix[row.role]) matrix[row.role][row.page_key] = row.level;
+  return {
+    roles: ROLES.map(role => ({ key: role, label: ROLE_LABELS[role] })),
+    pages: PAGE_KEYS.map(key => ({ key, label: PAGE_LABELS[key] })),
+    levels: LEVELS,
+    matrix
+  };
+});
+
+app.patch<{ Body: { role?: string; pageKey?: string; level?: string } }>('/api/role-permissions', async (request, reply) => {
+  const denied = requireAdminsPage(request, 'write');
+  if (denied) return reply.code(403).send({ error: denied });
+  const role = String(request.body?.role ?? '');
+  const pageKey = String(request.body?.pageKey ?? '');
+  const level = String(request.body?.level ?? '');
+  if (!ROLES.includes(role as typeof ROLES[number])) return reply.code(400).send({ error: 'บทบาทไม่ถูกต้อง' });
+  if (!PAGE_KEYS.includes(pageKey as typeof PAGE_KEYS[number])) return reply.code(400).send({ error: 'เมนูไม่ถูกต้อง' });
+  if (!LEVELS.includes(level as Level)) return reply.code(400).send({ error: 'ระดับสิทธิ์ไม่ถูกต้อง' });
+  // ผู้ดูแลระบบต้องเข้าถึงได้ทุกอย่างเสมอ ไม่งั้นแก้ตารางพลาดครั้งเดียวคือล็อกตัวเองออกถาวร
+  if (role === 'admin') return reply.code(400).send({ error: 'สิทธิ์ของผู้ดูแลระบบถูกล็อกไว้ แก้ไม่ได้' });
+  await db.query(
+    `INSERT INTO role_permissions (role, page_key, level) VALUES ($1, $2, $3)
+     ON CONFLICT (role, page_key) DO UPDATE SET level = EXCLUDED.level`, [role, pageKey, level]);
+  await writeAudit(request.admin ?? null, 'permission.update', `${role}/${pageKey}`, { level });
+  return { ok: true };
 });
 
 // ===== สิทธิ์การใช้งาน =====
@@ -2044,4 +2480,24 @@ app.post('/webhooks/line', async (request, reply) => {
 });
 
 await initializeDatabase();
+
+// บัญชีผู้ดูแลระบบคนแรก สร้างจาก ADMIN_BOOTSTRAP_EMAIL ใน .env
+// สร้างให้ครั้งเดียวตอนที่ยังไม่มีบัญชีนั้น แล้วพิมพ์ลิงก์ตั้งรหัสผ่านลง log ให้ไปตั้งเอง
+// ตั้งใจไม่ให้ "คนแรกที่สมัครได้เป็นผู้ดูแลระบบ" เพราะเว็บนี้เปิดอยู่บนอินเทอร์เน็ตจริง
+const bootstrapEmail = (process.env.ADMIN_BOOTSTRAP_EMAIL ?? '').trim().toLowerCase();
+if (bootstrapEmail) {
+  const existing = await db.query('SELECT id FROM admins WHERE email = $1', [bootstrapEmail]);
+  if (!existing.rowCount) {
+    const created = await db.query(
+      `INSERT INTO admins (email, name, role, status, line_user_id)
+       VALUES ($1, $2, 'admin', 'active', $3) RETURNING id`,
+      [bootstrapEmail, (process.env.ADMIN_BOOTSTRAP_NAME ?? 'ผู้ดูแลระบบ').trim(),
+       (process.env.ADMIN_BOOTSTRAP_LINE_USER_ID ?? '').trim() || null]);
+    const token = newToken();
+    await db.query(
+      "INSERT INTO password_resets (token_hash, admin_id, expires_at) VALUES ($1, $2, NOW() + interval '24 hours')",
+      [hashToken(token), created.rows[0].id]);
+    app.log.warn(`สร้างบัญชีผู้ดูแลระบบคนแรก ${bootstrapEmail} แล้ว ตั้งรหัสผ่านที่ ${BASE_URL}/reset?token=${token} (ลิงก์ใช้ได้ 24 ชั่วโมง)`);
+  }
+}
 await app.listen({ host: '0.0.0.0', port });
