@@ -601,7 +601,6 @@
                 <button type="button" data-claim-status="">ทั้งหมด</button>
               </div>
             </div>
-          </div>
             <div class="row g-3 mt-1">
               <div class="col-sm-4"><div class="stat-card"><div class="stat-label">รอตรวจ</div><div class="stat-value" style="color:#ef6c00" id="claimStatPending">0.00</div></div></div>
               <div class="col-sm-4"><div class="stat-card"><div class="stat-label">อนุมัติแล้ว</div><div class="stat-value" style="color:#087e45" id="claimStatApproved">0.00</div></div></div>
@@ -3065,10 +3064,12 @@
 
     async function loadMe() {
       try {
-        me = await fetch('/api/me').then(r => r.ok ? r.json() : null);
+        const data = await fetch('/api/me').then(r => r.ok ? r.json() : null);
+        // ถ้าตอบมาผิดรูป ให้ถือว่ายังไม่รู้สิทธิ์ ดีกว่าปล่อยให้ทั้งหน้าพังเพราะอ่านฟิลด์ที่ไม่มี
+        me = data && typeof data.name === 'string' && data.permissions ? data : null;
       } catch { me = null; }
       if (!me) return;
-      meName.textContent = me.via_api_key ? 'เครื่องมือ' : me.name.split(' ')[0];
+      meName.textContent = me.via_api_key ? 'เครื่องมือ' : (me.name.split(' ')[0] || me.name);
       meNameFull.textContent = me.name;
       meEmail.textContent = me.email;
       meRole.textContent = me.role_label;
@@ -3084,6 +3085,8 @@
       addShiftBtn.dataset.needWrite = 'shifts';
       for (const button of [addDeptBtn, addSiteBtn, addTypeBtn]) button.dataset.needWrite = 'settings';
       route();
+      // เปิดมาที่หน้าไหนโดยตรงก็ต้องโหลดข้อมูลของหน้านั้น ไม่ใช่รอให้กดเปลี่ยนเมนูก่อน
+      Promise.all((PAGE_LOADERS[activePage] ?? (() => []))()).catch(() => {});
     }
 
     logoutBtn.addEventListener('click', async () => {
