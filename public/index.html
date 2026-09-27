@@ -25,7 +25,23 @@
     .kind-btn.active[data-entry-kind="advance"] { background:#fff3cd; color:#7a4f01; border-color:#ffe08a; }
     .kind-btn.active[data-entry-kind="payment"] { background:#d7f2e3; color:#0b5f38; border-color:#9fdcbd; }
     body { background:#f4f7fb; color:#263238; }
-    .sidebar { width:264px; min-height:100vh; background:linear-gradient(180deg,#075a35,#087e45); }
+    .sidebar { width:264px; min-height:100vh; background:linear-gradient(180deg,#075a35,#087e45);
+      transition:width .18s ease, transform .2s ease; }
+    /* จอใหญ่ ให้เมนูติดอยู่กับที่ เลื่อนหน้ายาวแค่ไหนก็ยังกดเมนูได้ */
+    @media (min-width:768px) {
+      .sidebar { position:sticky; top:0; height:100vh; overflow-y:auto; flex:0 0 auto; }
+      body.sidebar-mini .sidebar { width:76px; }
+      body.sidebar-mini .sidebar .nav-text,
+      body.sidebar-mini .sidebar .brand-text,
+      body.sidebar-mini .sidebar .brand-sub,
+      body.sidebar-mini .sidebar .nav-group-label,
+      body.sidebar-mini .sidebar .sidebar-foot { display:none; }
+      body.sidebar-mini .sidebar .nav-link { justify-content:center; padding-left:.5rem; padding-right:.5rem; }
+      body.sidebar-mini .sidebar .nav-link i { margin-right:0 !important; font-size:1.15rem; }
+      body.sidebar-mini .sidebar .brand { justify-content:center; }
+      body.sidebar-mini .sidebar .nav-link .badge { position:absolute; top:.15rem; right:.35rem; }
+      body.sidebar-mini .sidebar .nav-link { position:relative; }
+    }
     .brand { font-weight:700; letter-spacing:.2px; }
     .nav-pills .nav-link { color:#d8f5e5; margin:.2rem .6rem; border-radius:.6rem; }
     .nav-pills .nav-link.active,.nav-pills .nav-link:hover { background:#fff; color:#087e45; }
@@ -33,51 +49,77 @@
     .stat-icon { width:48px; height:48px; display:grid; place-items:center; border-radius:.8rem; font-size:1.35rem; }
     .empty-state { padding:4rem 1rem; }
     #employeesTable tr, #shiftsTable tr { cursor:pointer; }
-    @media (max-width:767.98px){ .sidebar{width:100%;min-height:auto} }
+    /* มือถือ เมนูเป็นลิ้นชักเลื่อนออกมาทับ ไม่ดันเนื้อหาลงไปข้างล่าง */
+    @media (max-width:767.98px){
+      .sidebar { position:fixed; top:0; left:0; bottom:0; width:270px; max-width:85vw;
+        min-height:auto; overflow-y:auto; z-index:1045; transform:translateX(-100%); }
+      body.sidebar-open .sidebar { transform:none; }
+      .sidebar-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1040; display:none; }
+      body.sidebar-open .sidebar-backdrop { display:block; }
+      body.sidebar-open { overflow:hidden; }
+    }
+    /* ตารางกว้างๆ ต้องเลื่อนในกรอบของตัวเอง ไม่ใช่ดันทั้งหน้าให้เลื่อนข้าง */
+    .table-responsive { -webkit-overflow-scrolling:touch; }
+    @media (max-width:575.98px){
+      h1.h3 { font-size:1.25rem; }
+      .stat-card .stat-value { font-size:20px; }
+      .card-header, .card-body, .card-footer { padding-left:1rem !important; padding-right:1rem !important; }
+      .table td.ps-4, .table th.ps-4 { padding-left:1rem !important; }
+      .table td.pe-4, .table th.pe-4 { padding-right:1rem !important; }
+    }
   </style>
 </head>
 <body>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
   <div class="d-md-flex">
-    <aside class="sidebar p-3 d-flex flex-column">
-      <a class="brand d-flex align-items-center gap-2 text-white text-decoration-none fs-4 px-2 py-3" href="#overview"><i class="bi bi-clock-history"></i> TimeWork</a>
-      <div class="small text-white-50 px-2 mb-4">ระบบจัดการเวลาทำงาน</div>
+    <aside class="sidebar p-3 d-flex flex-column" id="sidebar">
+      <a class="brand d-flex align-items-center gap-2 text-white text-decoration-none fs-4 px-2 py-3" href="#overview"><i class="bi bi-clock-history"></i><span class="brand-text">TimeWork</span></a>
+      <div class="small text-white-50 px-2 mb-4 brand-sub">ระบบจัดการเวลาทำงาน</div>
       <nav class="nav nav-pills flex-column gap-1">
-        <a class="nav-link" href="#overview" data-page="overview"><i class="bi bi-grid-fill me-2"></i>ภาพรวม</a>
-        <a class="nav-link" href="#employees" data-page="employees"><i class="bi bi-people-fill me-2"></i>พนักงาน</a>
-        <a class="nav-link" href="#shifts" data-page="shifts"><i class="bi bi-clock me-2"></i>กะการทำงาน</a>
-        <a class="nav-link" href="#schedule" data-page="schedule"><i class="bi bi-calendar3-week me-2"></i>ตารางการทำงาน</a>
-        <a class="nav-link" href="#leaves" data-page="leaves"><i class="bi bi-person-dash me-2"></i>การลา</a>
-        <a class="nav-link" href="#logs" data-page="logs"><i class="bi bi-calendar-check me-2"></i>บันทึกเวลา</a>
-        <a class="nav-link" href="#missing" data-page="missing"><i class="bi bi-exclamation-triangle me-2"></i>ลืมลงเวลา</a>
-        <a class="nav-link" href="#reports" data-page="reports"><i class="bi bi-file-earmark-bar-graph me-2"></i>รายงาน</a>
+        <a class="nav-link" href="#overview" data-page="overview"><i class="bi bi-grid-fill me-2"></i><span class="nav-text">ภาพรวม</span></a>
+        <a class="nav-link" href="#employees" data-page="employees"><i class="bi bi-people-fill me-2"></i><span class="nav-text">พนักงาน</span></a>
+        <a class="nav-link" href="#shifts" data-page="shifts"><i class="bi bi-clock me-2"></i><span class="nav-text">กะการทำงาน</span></a>
+        <a class="nav-link" href="#schedule" data-page="schedule"><i class="bi bi-calendar3-week me-2"></i><span class="nav-text">ตารางการทำงาน</span></a>
+        <a class="nav-link" href="#leaves" data-page="leaves"><i class="bi bi-person-dash me-2"></i><span class="nav-text">การลา</span></a>
+        <a class="nav-link" href="#logs" data-page="logs"><i class="bi bi-calendar-check me-2"></i><span class="nav-text">บันทึกเวลา</span></a>
+        <a class="nav-link" href="#missing" data-page="missing"><i class="bi bi-exclamation-triangle me-2"></i><span class="nav-text">ลืมลงเวลา</span></a>
+        <a class="nav-link" href="#reports" data-page="reports"><i class="bi bi-file-earmark-bar-graph me-2"></i><span class="nav-text">รายงาน</span></a>
         <div class="nav-group-label">การเงิน</div>
-        <a class="nav-link" href="#pay" data-page="pay"><i class="bi bi-cash-coin me-2"></i>เงินค่าตอบแทน</a>
-        <a class="nav-link" href="#advance" data-page="advance"><i class="bi bi-wallet2 me-2"></i>เงินที่เบิก</a>
+        <a class="nav-link" href="#pay" data-page="pay"><i class="bi bi-cash-coin me-2"></i><span class="nav-text">เงินค่าตอบแทน</span></a>
+        <a class="nav-link" href="#advance" data-page="advance"><i class="bi bi-wallet2 me-2"></i><span class="nav-text">เงินที่เบิก</span></a>
         <a class="nav-link d-flex align-items-center" href="#expenses" data-page="expenses">
-          <i class="bi bi-receipt me-2"></i><span>รายการค่าใช้จ่าย</span>
+          <i class="bi bi-receipt me-2"></i><span class="nav-text">รายการค่าใช้จ่าย</span>
           <span class="badge rounded-pill ms-auto d-none" id="pendingExpenseBadge"
                 style="background:#ffca28;color:#3e2723;font-size:.75rem;font-weight:700">0</span>
         </a>
-        <a class="nav-link" href="#settings" data-page="settings"><i class="bi bi-gear-fill me-2"></i>ตั้งค่า</a>
+        <a class="nav-link" href="#settings" data-page="settings"><i class="bi bi-gear-fill me-2"></i><span class="nav-text">ตั้งค่า</span></a>
         <div class="nav-group-label">ระบบ</div>
         <a class="nav-link d-flex align-items-center" href="#admins" data-page="admins">
-          <i class="bi bi-person-badge-fill me-2"></i><span>ผู้ดูแลระบบ</span>
+          <i class="bi bi-person-badge-fill me-2"></i><span class="nav-text">ผู้ดูแลระบบ</span>
           <span class="badge rounded-pill ms-auto d-none" id="pendingAdminBadge"
                 style="background:#ffca28;color:#3e2723;font-size:.75rem;font-weight:700">0</span>
         </a>
-        <a class="nav-link" href="#roles" data-page="roles"><i class="bi bi-shield-lock-fill me-2"></i>สิทธิ์ตามบทบาท</a>
+        <a class="nav-link" href="#roles" data-page="roles"><i class="bi bi-shield-lock-fill me-2"></i><span class="nav-text">สิทธิ์ตามบทบาท</span></a>
       </nav>
-      <div class="mt-auto text-white-50 small px-2 pt-5"><i class="bi bi-person-circle me-1"></i>ผู้ดูแลระบบ</div>
+      <div class="mt-auto pt-4 d-none d-md-block">
+        <button class="btn btn-sm w-100 text-white-50 border-0" id="sidebarMiniBtn" style="background:rgba(255,255,255,.12)">
+          <i class="bi bi-chevron-double-left" id="sidebarMiniIcon"></i><span class="nav-text ms-1">ย่อเมนู</span>
+        </button>
+      </div>
+      <div class="text-white-50 small px-2 pt-3 sidebar-foot"><i class="bi bi-person-circle me-1"></i>ผู้ดูแลระบบ</div>
     </aside>
 
     <main class="flex-grow-1 p-3 p-lg-4">
-      <header class="d-flex justify-content-between align-items-center mb-4">
-        <div>
+      <header class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div class="d-flex align-items-start gap-2">
+          <button class="btn btn-outline-secondary d-md-none" id="sidebarToggle" aria-label="เปิดเมนู" aria-expanded="false"><i class="bi bi-list"></i></button>
+          <div>
           <h1 class="h3 fw-bold mb-1" id="pageTitle">ภาพรวมวันนี้</h1>
           <p class="text-secondary mb-0" id="pageSubtitle">กำลังโหลดวันที่...</p>
           <small class="text-secondary" id="lastUpdated"></small>
+          </div>
         </div>
-        <div class="d-flex gap-2 align-items-start">
+        <div class="d-flex gap-2 align-items-start flex-wrap">
           <div class="d-none bg-white rounded-3 d-flex align-items-center gap-1 p-1 shadow-sm" id="monthPicker">
             <button class="btn btn-sm btn-outline-secondary" id="monthPrevBtn" aria-label="เดือนก่อนหน้า"><i class="bi bi-chevron-left"></i></button>
             <span class="fw-semibold text-center px-2" id="monthLabel" style="min-width:8.5rem"></span>
@@ -3047,6 +3089,48 @@
       roles: () => [loadRoleMatrix()]
     };
 
+    // ===== แถบเมนูซ้าย =====
+    // มือถือ: เป็นลิ้นชักเลื่อนออกมาทับเนื้อหา · จอใหญ่: ย่อเหลือไอคอนได้ และจำค่าที่เลือกไว้
+    const MINI_KEY = 'timework.sidebarMini';
+    const isMobile = () => window.matchMedia('(max-width: 767.98px)').matches;
+
+    function applyMini(mini) {
+      document.body.classList.toggle('sidebar-mini', mini);
+      sidebarMiniIcon.className = mini ? 'bi bi-chevron-double-right' : 'bi bi-chevron-double-left';
+      sidebarMiniBtn.setAttribute('aria-label', mini ? 'ขยายเมนู' : 'ย่อเมนู');
+      sidebarMiniBtn.title = mini ? 'ขยายเมนู' : 'ย่อเมนู';
+      // ตอนย่อแล้วข้อความหาย ต้องมี title ให้ชี้เมาส์ดูได้ว่าปุ่มไหนคืออะไร
+      for (const link of document.querySelectorAll('.sidebar .nav-link[data-page]')) {
+        link.title = mini ? (link.querySelector('.nav-text')?.textContent ?? '') : '';
+      }
+    }
+    function openDrawer(open) {
+      document.body.classList.toggle('sidebar-open', open);
+      sidebarToggle.setAttribute('aria-expanded', String(open));
+    }
+
+    sidebarToggle.addEventListener('click', () => openDrawer(!document.body.classList.contains('sidebar-open')));
+    sidebarBackdrop.addEventListener('click', () => openDrawer(false));
+    sidebarMiniBtn.addEventListener('click', () => {
+      const mini = !document.body.classList.contains('sidebar-mini');
+      applyMini(mini);
+      try { localStorage.setItem(MINI_KEY, mini ? '1' : '0'); } catch {}
+    });
+    // กดเมนูบนมือถือแล้วต้องปิดลิ้นชักเอง ไม่งั้นบังเนื้อหาที่เพิ่งเปิด
+    sidebar.addEventListener('click', event => {
+      if (event.target.closest('.nav-link[data-page]') && isMobile()) openDrawer(false);
+    });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') openDrawer(false); });
+    // หมุนจอหรือย่อหน้าต่างแล้วกลับมาจอใหญ่ ลิ้นชักต้องไม่ค้างเปิดอยู่
+    window.addEventListener('resize', () => { if (!isMobile()) openDrawer(false); });
+
+    (() => {
+      let stored = null;
+      try { stored = localStorage.getItem(MINI_KEY); } catch {}
+      // ยังไม่เคยเลือกเอง ให้ย่อไว้ก่อนบนจอแคบอย่างแท็บเล็ตแนวตั้ง จะได้เหลือที่ให้ตาราง
+      applyMini(stored === null ? window.innerWidth < 992 : stored === '1');
+    })();
+
     // ===== ตัวตนและสิทธิ์ของคนที่ล็อกอินอยู่ =====
     // เมนูที่ซ่อนเป็นเพียงความสะดวก ฝั่ง API ตรวจสิทธิ์ซ้ำทุกครั้งอยู่แล้ว
     let me = null;
@@ -3080,6 +3164,7 @@
       for (const link of document.querySelectorAll('.nav-link[data-page]')) {
         link.classList.toggle('d-none', !allowed(PAGE_PERMISSION[link.dataset.page] ?? link.dataset.page));
       }
+      applyMini(document.body.classList.contains('sidebar-mini'));
       // ปุ่มเพิ่มข้อมูลต้องหายไปถ้าดูได้อย่างเดียว
       addEmployeeBtn.dataset.needWrite = 'employees';
       addShiftBtn.dataset.needWrite = 'shifts';
