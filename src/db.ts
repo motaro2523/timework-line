@@ -129,6 +129,13 @@ export async function initializeDatabase() {
     -- สิทธิ์ส่งรายการค่าใช้จ่าย ผู้ดูแลเปิดให้เป็นรายคน
     ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_submit_expense BOOLEAN NOT NULL DEFAULT FALSE;
     -- รายการค่าใช้จ่ายที่พนักงานส่งเข้ามา ต้องผ่านการอนุมัติเหมือน OT
+    -- ค่าตั้งค่าของระบบแบบคีย์-ค่า ตอนนี้ใช้เก็บการแจ้งเตือนเข้า LINE
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key VARCHAR(60) PRIMARY KEY,
+      value TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     -- ===== บัญชีผู้ดูแลระบบ =====
     -- line_user_id ใช้ส่งลิงก์ตั้งรหัสผ่านและแจ้งผลอนุมัติ เพราะระบบนี้ไม่มีช่องทางอีเมล
     CREATE TABLE IF NOT EXISTS admins (

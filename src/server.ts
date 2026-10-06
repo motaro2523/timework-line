@@ -585,6 +585,220 @@ app.patch<{ Params: { id: string }; Body: { name?: string; active?: boolean; can
   }
 });
 
+// ===== สรุปประจำวันเข้า LINE ของผู้จัดการ =====
+const NOTIFY_KEYS = ['notifyEnabled', 'notifyLineUserId', 'notifyLabel', 'notifyTime', 'notifyLastSent'] as const;
+type NotifySettings = { enabled: boolean; lineUserId: string; label: string; time: string; lastSent: string };
+
+async function readNotifySettings(): Promise<NotifySettings> {
+  const { rows } = await db.query('SELECT key, value FROM app_settings WHERE key = ANY($1::varchar[])', [NOTIFY_KEYS]);
+  const map = Object.fromEntries(rows.map(row => [row.key, row.value]));
+  return {
+    enabled: map.notifyEnabled === '1',
+    lineUserId: map.notifyLineUserId ?? '',
+    label: map.notifyLabel ?? '',
+    time: /^\d{2}:\d{2}$/.test(map.notifyTime ?? '') ? map.notifyTime : '18:00',
+    lastSent: map.notifyLastSent ?? ''
+  };
+}
+
+async function writeSetting(key: string, value: string | null) {
+  await db.query(
+    `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [key, value]);
+}
+
+const bangkokNow = () => new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+const bangkokDate = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
+const thaiDay = (iso: string) =>
+  new Intl.DateTimeFormat('th-TH', { dateStyle: 'long', timeZone: 'Asia/Bangkok' }).format(new Date(`${iso}T00:00:00Z`));
+const money = (value: number) =>
+  new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+
+// รวมเรื่องลงเวลาและค่าใช้จ่ายของวันนั้นไว้ในข้อความเดียว จะได้ไม่เด้งหลายรอบ
+async function buildDailySummary(workDate: string): Promise<string> {
+  const attendance = await db.query(`
+    WITH src AS (${scheduleSourceSql('$1::date')}),
+    scans AS (
+      SELECT employee_id,
+             MIN(occurred_at) FILTER (WHERE event_type = 'check_in') AS first_in,
+             MAX(occurred_at) FILTER (WHERE event_type = 'check_out') AS last_out,
+             bool_or(COALESCE(inside_site, TRUE) = FALSE) AS outside
+      FROM (
+        SELECT t.employee_id, t.event_type, t.occurred_at, site.inside_site
+        FROM time_logs t
+        ${nearestSiteJoin('t.latitude', 't.longitude')}
+        WHERE (t.occurred_at AT TIME ZONE 'Asia/Bangkok')::date = $1::date
+      ) raw
+      GROUP BY employee_id
+    )
+    SELECT src.employee_code, src.name,
+           (src.effective_shift_id IS NOT NULL) AS scheduled,
+           (sc.first_in IS NOT NULL) AS came,
+           (sc.last_out IS NOT NULL) AS went_out,
+           COALESCE(sc.outside, FALSE) AS outside,
+           (lv.employee_id IS NOT NULL) AS on_leave,
+           CASE WHEN sc.first_in IS NULL OR sh.id IS NULL THEN 0
+                ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (
+                  (sc.first_in AT TIME ZONE 'Asia/Bangkok')::time - sh.start_time
+                )) / 60)::int - COALESCE(sh.grace_minutes, 0)) END AS late_minutes
+    FROM src
+    LEFT JOIN scans sc ON sc.employee_id = src.employee_id
+    LEFT JOIN shifts sh ON sh.id = src.effective_shift_id
+    LEFT JOIN leaves lv ON lv.employee_id = src.employee_id AND lv.work_date = $1::date
+    WHERE src.active
+    ORDER BY src.employee_code
+  `, [workDate]);
+
+  const rows = attendance.rows;
+  const scheduled = rows.filter(row => row.scheduled && !row.on_leave);
+  const came = scheduled.filter(row => row.came);
+  const late = came.filter(row => Number(row.late_minutes) > 0);
+  const absent = scheduled.filter(row => !row.came);
+  const stillIn = came.filter(row => !row.went_out);
+  const outside = came.filter(row => row.outside);
+  const onLeave = rows.filter(row => row.on_leave);
+
+  const claims = await db.query(`
+    SELECT c.status, c.amount::float8 AS amount, c.approved_amount::float8 AS approved_amount,
+           e.employee_code, e.name, c.category,
+           (c.created_at AT TIME ZONE 'Asia/Bangkok')::date = $1::date AS sent_today
+    FROM expense_claims c JOIN employees e ON e.id = c.employee_id
+    WHERE (c.created_at AT TIME ZONE 'Asia/Bangkok')::date = $1::date OR c.status = 'pending'
+  `, [workDate]);
+  const newClaims = claims.rows.filter(row => row.sent_today);
+  const pending = claims.rows.filter(row => row.status === 'pending');
+
+  const lines = [`TimeWork · สรุปประจำวัน`, thaiDay(workDate), ''];
+  lines.push('— การลงเวลา —');
+  if (!scheduled.length) {
+    lines.push('วันนี้ไม่มีใครมีตารางทำงาน');
+  } else {
+    lines.push(`มาทำงาน ${came.length} จาก ${scheduled.length} คน`);
+    if (late.length) {
+      lines.push(`มาสาย ${late.length} คน`);
+      for (const row of late) lines.push(`  · ${row.name} สาย ${row.late_minutes} นาที`);
+    }
+    if (absent.length) {
+      lines.push(`ไม่มาลงเวลา ${absent.length} คน`);
+      for (const row of absent) lines.push(`  · ${row.name}`);
+    }
+    if (stillIn.length) {
+      lines.push(`ยังไม่ลงเวลาออก ${stillIn.length} คน`);
+      for (const row of stillIn) lines.push(`  · ${row.name}`);
+    }
+    if (outside.length) {
+      lines.push(`ลงเวลานอกพื้นที่ ${outside.length} คน`);
+      for (const row of outside) lines.push(`  · ${row.name}`);
+    }
+    if (!late.length && !absent.length && !stillIn.length && !outside.length) lines.push('ไม่มีรายการผิดปกติ');
+  }
+  if (onLeave.length) {
+    lines.push(`ลา ${onLeave.length} คน`);
+    for (const row of onLeave) lines.push(`  · ${row.name}`);
+  }
+
+  lines.push('', '— ค่าใช้จ่าย —');
+  if (newClaims.length) {
+    lines.push(`ส่งเข้ามาวันนี้ ${newClaims.length} รายการ รวม ${money(newClaims.reduce((sum, row) => sum + row.amount, 0))} บาท`);
+    for (const row of newClaims) lines.push(`  · ${row.name} ${row.category} ${money(row.amount)} บาท`);
+  } else {
+    lines.push('วันนี้ไม่มีรายการใหม่');
+  }
+  if (pending.length) {
+    lines.push(`ค้างรอตรวจทั้งหมด ${pending.length} รายการ รวม ${money(pending.reduce((sum, row) => sum + row.amount, 0))} บาท`);
+    lines.push(`ตรวจได้ที่ ${BASE_URL}/#expenses`);
+  } else {
+    lines.push('ไม่มีรายการค้างรอตรวจ');
+  }
+  return lines.join('\n');
+}
+
+async function sendDailySummary(workDate: string, settings: NotifySettings) {
+  if (!settings.lineUserId) return { sent: false, error: 'ยังไม่ได้เลือกผู้รับ' };
+  const text = await buildDailySummary(workDate);
+  const sent = await pushLine(settings.lineUserId, text);
+  return sent ? { sent: true } : { sent: false, error: 'ส่งเข้า LINE ไม่สำเร็จ ตรวจว่าผู้รับเพิ่มบัญชี LINE ของระบบเป็นเพื่อนแล้วหรือยัง' };
+}
+
+// ตรวจทุกนาที ถึงเวลาแล้วและยังไม่ได้ส่งของวันนี้จึงส่ง ทำให้รีสตาร์ตกี่ครั้งก็ไม่ส่งซ้ำ
+async function notifyTick() {
+  try {
+    const settings = await readNotifySettings();
+    if (!settings.enabled || !settings.lineUserId) return;
+    const today = bangkokDate();
+    if (settings.lastSent === today) return;
+    const now = bangkokNow();
+    const current = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    if (current < settings.time) return;
+    const result = await sendDailySummary(today, settings);
+    // บันทึกว่าส่งแล้วไม่ว่าสำเร็จหรือไม่ จะได้ไม่วนยิงซ้ำทุกนาทีเมื่อ LINE ปฏิเสธ
+    await writeSetting('notifyLastSent', today);
+    if (!result.sent) app.log.warn({ error: result.error }, 'daily summary not delivered');
+    else app.log.info('daily summary sent');
+  } catch (error) {
+    app.log.warn({ error }, 'notifyTick failed');
+  }
+}
+
+app.get('/api/settings/notify', async (request, reply) => {
+  if (!canRead(request.admin?.permissions.settings ?? 'none')) {
+    return reply.code(403).send({ error: 'ไม่มีสิทธิ์ดูการตั้งค่า' });
+  }
+  const settings = await readNotifySettings();
+  return { ...settings, lineUserId: settings.lineUserId ? 'ตั้งไว้แล้ว' : '', has_recipient: Boolean(settings.lineUserId) };
+});
+
+app.put<{ Body: { enabled?: boolean; employeeId?: string; lineUserId?: string; time?: string } }>(
+  '/api/settings/notify', async (request, reply) => {
+  if (!canWrite(request.admin?.permissions.settings ?? 'none')) {
+    return reply.code(403).send({ error: 'ไม่มีสิทธิ์แก้การตั้งค่า' });
+  }
+  if (request.body?.time !== undefined) {
+    const time = String(request.body.time);
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return reply.code(400).send({ error: 'เวลาต้องอยู่ในรูปแบบ HH:MM' });
+    await writeSetting('notifyTime', time);
+  }
+  if (request.body?.employeeId !== undefined) {
+    const id = String(request.body.employeeId ?? '').trim();
+    if (!id) {
+      await writeSetting('notifyLineUserId', null);
+      await writeSetting('notifyLabel', null);
+    } else {
+      if (!/^\d+$/.test(id)) return reply.code(400).send({ error: 'รหัสอ้างอิงพนักงานไม่ถูกต้อง' });
+      const { rows } = await db.query(
+        'SELECT employee_code, name, line_user_id FROM employees WHERE id = $1 AND line_user_id IS NOT NULL', [id]);
+      if (!rows.length) return reply.code(400).send({ error: 'เลือกได้เฉพาะพนักงานที่ผูกบัญชี LINE ไว้แล้ว' });
+      await writeSetting('notifyLineUserId', rows[0].line_user_id);
+      await writeSetting('notifyLabel', `${rows[0].employee_code} ${rows[0].name}`);
+    }
+  }
+  if (request.body?.enabled !== undefined) await writeSetting('notifyEnabled', request.body.enabled ? '1' : '0');
+  await writeAudit(request.admin ?? null, 'settings.notify', null, { enabled: request.body?.enabled, time: request.body?.time });
+  const settings = await readNotifySettings();
+  return { ...settings, lineUserId: settings.lineUserId ? 'ตั้งไว้แล้ว' : '', has_recipient: Boolean(settings.lineUserId) };
+});
+
+app.post<{ Body: { date?: string } }>('/api/settings/notify/test', async (request, reply) => {
+  if (!canWrite(request.admin?.permissions.settings ?? 'none')) {
+    return reply.code(403).send({ error: 'ไม่มีสิทธิ์แก้การตั้งค่า' });
+  }
+  const settings = await readNotifySettings();
+  const date = parseIsoDate(String(request.body?.date ?? '').trim() || bangkokDate());
+  if (date.error) return reply.code(400).send({ error: date.error });
+  const result = await sendDailySummary(date.value!, settings);
+  if (!result.sent) return reply.code(400).send({ error: result.error });
+  return { ok: true };
+});
+
+app.get<{ Querystring: { date?: string } }>('/api/settings/notify/preview', async (request, reply) => {
+  if (!canRead(request.admin?.permissions.settings ?? 'none')) {
+    return reply.code(403).send({ error: 'ไม่มีสิทธิ์ดูการตั้งค่า' });
+  }
+  const date = parseIsoDate((request.query.date ?? '').trim() || bangkokDate());
+  if (date.error) return reply.code(400).send({ error: date.error });
+  return { text: await buildDailySummary(date.value!) };
+});
+
 // ===== บัญชีผู้ดูแลระบบ =====
 // ทุกเส้นทางในหมวดนี้ต้องเป็นสิทธิ์ผู้ดูแลระบบ ตรวจซ้ำในตัว handler ไม่พึ่งการซ่อนเมนู
 function requireAdminsPage(request: FastifyRequest, level: 'read' | 'write') {
@@ -2500,4 +2714,5 @@ if (bootstrapEmail) {
     app.log.warn(`สร้างบัญชีผู้ดูแลระบบคนแรก ${bootstrapEmail} แล้ว ตั้งรหัสผ่านที่ ${BASE_URL}/reset?token=${token} (ลิงก์ใช้ได้ 24 ชั่วโมง)`);
   }
 }
+setInterval(notifyTick, 60_000);
 await app.listen({ host: '0.0.0.0', port });

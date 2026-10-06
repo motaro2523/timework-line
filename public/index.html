@@ -734,6 +734,35 @@
       <div id="view-settings" class="d-none">
         <section class="table-card card mb-4">
           <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">แจ้งสรุปประจำวันเข้า LINE</h2>
+            <small class="text-secondary" id="notifySummary">กำลังโหลดข้อมูล...</small>
+          </div>
+          <div class="card-body px-4 pb-3">
+            <div class="row g-3 align-items-end">
+              <div class="col-lg-4">
+                <label class="form-label mb-1" for="notifyEmployee">ส่งเข้า LINE ของ</label>
+                <select class="form-select" id="notifyEmployee"></select>
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label mb-1" for="notifyTime">เวลาที่ส่ง</label>
+                <input class="form-control" type="time" id="notifyTime" step="60">
+              </div>
+              <div class="col-lg-5 d-flex flex-wrap gap-2">
+                <div class="form-check form-switch me-auto align-self-center">
+                  <input class="form-check-input" type="checkbox" id="notifyEnabled">
+                  <label class="form-check-label" for="notifyEnabled">เปิดการแจ้งเตือน</label>
+                </div>
+                <button type="button" class="btn btn-outline-secondary" id="notifyPreviewBtn"><i class="bi bi-eye me-1"></i>ดูตัวอย่าง</button>
+                <button type="button" class="btn btn-success" id="notifyTestBtn"><i class="bi bi-send me-1"></i>ส่งทดสอบ</button>
+              </div>
+            </div>
+            <pre id="notifyPreview" class="d-none bg-body-secondary rounded-3 p-3 mt-3 mb-0 small" style="white-space:pre-wrap"></pre>
+          </div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>ส่งวันละครั้งตามเวลาที่ตั้งไว้ รวมทั้งเรื่องลงเวลาและค่าใช้จ่ายไว้ในข้อความเดียว · เลือกได้เฉพาะพนักงานที่ผูกบัญชี LINE ไว้แล้ว และผู้รับต้องเพิ่มบัญชี LINE ของระบบเป็นเพื่อนก่อน · เปลี่ยนเวลาย้อนหลังในวันที่ส่งไปแล้ว จะไม่ส่งซ้ำ รอวันถัดไป</small></div>
+        </section>
+
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4">
             <h2 class="h5 fw-bold mb-0">สถานที่ทำงาน (ตรวจพิกัดตอนลงเวลา)</h2>
             <small class="text-secondary" id="sitesSummary">กำลังโหลดข้อมูล...</small>
           </div>
@@ -1449,6 +1478,7 @@
         entryEmployee.value = previousEntryEmployee || (employees[0]?.id ?? '');
         renderLeaveControls();
         loadPermissions();
+        if (activePage === 'settings') loadNotify();
         await loadWeekGrid();
         const checkedIn = new Set(logs.filter(l => l.event_type === 'check_in').map(l => l.employee_code));
         const checkedOut = new Set(logs.filter(l => l.event_type === 'check_out').map(l => l.employee_code));
@@ -3086,8 +3116,89 @@
       advance: () => [loadEntryList()],
       expenses: () => [loadClaims(), loadPermissions()],
       admins: () => [loadAdmins()],
-      roles: () => [loadRoleMatrix()]
+      roles: () => [loadRoleMatrix()],
+      settings: () => [loadNotify()]
     };
+
+    // ===== แจ้งสรุปประจำวันเข้า LINE =====
+    let notifySettings = null;
+
+    async function loadNotify() {
+      try {
+        const data = await fetch('/api/settings/notify').then(r => r.json());
+        if (data.error) { setSummary(notifySummary, data.error, true); return; }
+        notifySettings = data;
+        const linked = employeeList.filter(employee => employee.line_user_id && employee.active);
+        notifyEmployee.innerHTML = ['<option value="">ยังไม่เลือก</option>']
+          .concat(linked.map(employee =>
+            `<option value="${esc(employee.id)}">${esc(employee.employee_code)} ${esc(employee.name)}</option>`)).join('');
+        // ฐานข้อมูลเก็บ LINE id ไม่ได้เก็บรหัสพนักงาน จึงจับคู่กลับด้วยชื่อที่บันทึกไว้ตอนตั้งค่า
+        const current = linked.find(employee => `${employee.employee_code} ${employee.name}` === data.label);
+        notifyEmployee.value = current ? String(current.id) : '';
+        notifyTime.value = data.time;
+        notifyEnabled.checked = data.enabled;
+        setSummary(notifySummary, !linked.length
+          ? 'ยังไม่มีพนักงานคนไหนผูกบัญชี LINE จึงยังเลือกผู้รับไม่ได้'
+          : data.has_recipient
+            ? `${data.enabled ? 'เปิดอยู่' : 'ปิดอยู่'} · ส่งให้ ${data.label} ทุกวันเวลา ${data.time}`
+              + (data.lastSent ? ` · ส่งล่าสุด ${formatDay(data.lastSent)}` : ' · ยังไม่เคยส่ง')
+            : 'ยังไม่ได้เลือกผู้รับ');
+      } catch {
+        setSummary(notifySummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+      }
+    }
+
+    async function saveNotify(body, button) {
+      const label = button ? button.innerHTML : '';
+      if (button) { button.disabled = true; button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; }
+      try {
+        const response = await fetch('/api/settings/notify', {
+          method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body)
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) { setSummary(notifySummary, result.error ?? 'บันทึกไม่สำเร็จ', true); await loadNotify(); return false; }
+        await loadNotify();
+        return true;
+      } catch {
+        setSummary(notifySummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        return false;
+      } finally {
+        if (button && button.isConnected) { button.innerHTML = label; button.disabled = false; }
+      }
+    }
+
+    notifyEmployee.addEventListener('change', () => saveNotify({ employeeId: notifyEmployee.value }, null));
+    notifyTime.addEventListener('change', () => saveNotify({ time: notifyTime.value }, null));
+    notifyEnabled.addEventListener('change', () => saveNotify({ enabled: notifyEnabled.checked }, null));
+
+    notifyPreviewBtn.addEventListener('click', async () => {
+      notifyPreview.classList.remove('d-none');
+      notifyPreview.textContent = 'กำลังสร้างตัวอย่าง...';
+      try {
+        const data = await fetch('/api/settings/notify/preview').then(r => r.json());
+        notifyPreview.textContent = data.text ?? data.error ?? 'สร้างตัวอย่างไม่สำเร็จ';
+      } catch {
+        notifyPreview.textContent = 'ไม่สามารถเชื่อมต่อ API ได้';
+      }
+    });
+
+    notifyTestBtn.addEventListener('click', async () => {
+      const label = notifyTestBtn.innerHTML;
+      notifyTestBtn.disabled = true;
+      notifyTestBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังส่ง';
+      try {
+        const response = await fetch('/api/settings/notify/test', {
+          method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({})
+        });
+        const result = await response.json().catch(() => ({}));
+        setSummary(notifySummary, response.ok ? 'ส่งข้อความทดสอบเข้า LINE แล้ว' : (result.error ?? 'ส่งไม่สำเร็จ'), !response.ok);
+      } catch {
+        setSummary(notifySummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+      } finally {
+        notifyTestBtn.innerHTML = label;
+        notifyTestBtn.disabled = false;
+      }
+    });
 
     // ===== แถบเมนูซ้าย =====
     // มือถือ: เป็นลิ้นชักเลื่อนออกมาทับเนื้อหา · จอใหญ่: ย่อเหลือไอคอนได้ และจำค่าที่เลือกไว้
