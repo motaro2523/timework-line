@@ -675,19 +675,24 @@ async function outstandingItems(employeeId: string, asOf: string) {
   // เงินที่จ่ายไปก่อนมีหน้านี้ ยังไม่รู้ว่าจ่ายค่าอะไร แต่ต้องหักออกจากยอดค้าง
   // ไม่อย่างนั้นหน้าจะชวนให้จ่ายซ้ำสิ่งที่จ่ายไปแล้ว
   const unlinked = await db.query(`
-    SELECT p.id, to_char(p.entry_date, 'YYYY-MM-DD') AS entry_date, p.amount::float8 AS amount, p.note
+    SELECT p.id, to_char(p.entry_date, 'YYYY-MM-DD') AS entry_date, p.amount::float8 AS amount, p.note,
+           COALESCE((SELECT SUM(a.amount) FROM payment_allocations a WHERE a.payment_id = p.id), 0)::float8 AS allocated
     FROM payroll_entries p
     WHERE p.employee_id = $1 AND p.kind = 'payment' AND p.entry_date <= $2::date
-      AND NOT EXISTS (SELECT 1 FROM payment_allocations a WHERE a.payment_id = p.id)
     ORDER BY p.entry_date, p.id`, [employeeId, asOf]);
+  const credits: { id: string; date: string; remaining: number }[] = [];
   for (const row of unlinked.rows) {
+    const remaining = round2(row.amount - row.allocated);
+    if (remaining <= 0) continue;
+    credits.push({ id: String(row.id), date: row.entry_date, remaining });
     items.push({
-      key: `settled:${row.id}`, source: 'settled', amount: round2(-row.amount), locked: true,
+      key: `settled:${row.id}`, source: 'settled', amount: round2(-remaining), locked: true,
       label: `จ่ายไปแล้วเมื่อ ${formatThaiDay(row.entry_date)}`,
-      detail: row.note ? `${row.note} · บันทึกก่อนมีหน้านี้ จึงไม่รู้ว่าจ่ายค่าอะไร` : 'บันทึกก่อนมีหน้านี้ จึงไม่รู้ว่าจ่ายค่าอะไร'
+      detail: row.note ? `${row.note} · ยังไม่ได้ระบุว่าจ่ายค่าอะไร ระบบจะหักให้อัตโนมัติ` : 'ยังไม่ได้ระบุว่าจ่ายค่าอะไร ระบบจะหักให้อัตโนมัติ'
     });
   }
-  return { wage_paid_through: paidThrough, as_of: asOf, items };
+  const credit = round2(credits.reduce((sum, item) => sum + item.remaining, 0));
+  return { wage_paid_through: paidThrough, as_of: asOf, items, credit, credits };
 }
 
 app.get<{ Querystring: { employeeId?: string; asOf?: string } }>('/api/payruns/outstanding', async (request, reply) => {
@@ -765,26 +770,56 @@ app.post<{ Body: { employeeId?: string; payDate?: string; method?: string; note?
   const total = round2(prepared.reduce((sum, item) => sum + item.amount, 0));
   if (total <= 0) return reply.code(400).send({ error: 'ยอดรวมที่จ่ายต้องมากกว่า 0 บาท' });
 
+  // เงินที่เคยจ่ายไว้แต่ยังไม่ระบุว่าจ่ายค่าอะไร เอามาปิดรายการที่เลือกก่อน
+  // ไม่อย่างนั้นผู้ใช้จะโอนเต็มยอดรายการ ทั้งที่จ่ายล่วงหน้าไปแล้วบางส่วน แล้วยอดติดลบซ้ำ
+  const pool = (outstanding.credits ?? []).map(item => ({ ...item }));
+  const plan: { paymentId: string | null; item: typeof prepared[number]; amount: number }[] = [];
+  for (const item of prepared.filter(row => row.amount > 0)) {
+    let left = item.amount;
+    while (left > 0.004 && pool.length) {
+      const take = Math.min(left, pool[0].remaining);
+      plan.push({ paymentId: pool[0].id, item, amount: round2(take) });
+      pool[0].remaining = round2(pool[0].remaining - take);
+      left = round2(left - take);
+      if (pool[0].remaining <= 0.004) pool.shift();
+    }
+    if (left > 0.004) plan.push({ paymentId: null, item, amount: left });
+  }
+  for (const item of prepared.filter(row => row.amount < 0)) {
+    plan.push({ paymentId: null, item, amount: item.amount });
+  }
+  const creditUsed = round2(plan.filter(row => row.paymentId).reduce((sum, row) => sum + row.amount, 0));
+  const transfer = round2(plan.filter(row => !row.paymentId).reduce((sum, row) => sum + row.amount, 0));
+  if (transfer < 0) {
+    return reply.code(400).send({ error: 'รายการที่เลือกหักกันแล้วติดลบ กรุณาเลือกรายการให้ยอดเป็นบวก' });
+  }
+
   const client = await db.connect();
   try {
     await client.query('BEGIN');
-    const payment = await client.query(
-      `INSERT INTO payroll_entries (employee_id, entry_date, kind, amount, method, note)
-       VALUES ($1, $2::date, 'payment', $3, $4, $5) RETURNING id`,
-      [employeeId, payDate.value, total,
-       String(request.body?.method ?? '').trim().slice(0, 20) || null,
-       String(request.body?.note ?? '').trim().slice(0, 160) || null]);
-    const paymentId = payment.rows[0].id;
-    for (const item of prepared) {
+    let paymentId: string | null = null;
+    if (transfer > 0) {
+      const payment = await client.query(
+        `INSERT INTO payroll_entries (employee_id, entry_date, kind, amount, method, note)
+         VALUES ($1, $2::date, 'payment', $3, $4, $5) RETURNING id`,
+        [employeeId, payDate.value, transfer,
+         String(request.body?.method ?? '').trim().slice(0, 20) || null,
+         String(request.body?.note ?? '').trim().slice(0, 160) || null]);
+      paymentId = String(payment.rows[0].id);
+    }
+    for (const row of plan) {
+      const target = row.paymentId ?? paymentId;
+      if (!target) continue;
       await client.query(
         `INSERT INTO payment_allocations (payment_id, source, expense_id, advance_id, wage_from, wage_to, amount, label)
          VALUES ($1, $2, $3, $4, $5::date, $6::date, $7, $8)`,
-        [paymentId, item.source, item.expenseId, item.advanceId, item.wageFrom, item.wageTo, item.amount, item.label]);
+        [target, row.item.source, row.item.expenseId, row.item.advanceId,
+         row.item.wageFrom, row.item.wageTo, row.amount, row.item.label]);
     }
     await client.query('COMMIT');
     await writeAudit(request.admin ?? null, 'payrun.create', `employee:${employeeId}`,
-      { total, items: prepared.length, payDate: payDate.value });
-    return reply.code(201).send({ id: String(paymentId), total, items: prepared.length });
+      { total, creditUsed, transfer, items: prepared.length, payDate: payDate.value });
+    return reply.code(201).send({ id: paymentId, total, credit_used: creditUsed, transfer, items: prepared.length });
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

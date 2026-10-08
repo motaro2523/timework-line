@@ -682,7 +682,10 @@
               </div>
               <div class="card-body px-4 pb-4">
                 <div class="stat-card mb-3">
-                  <div class="stat-label">ยอดที่จะจ่ายรอบนี้</div>
+                  <div class="d-flex justify-content-between small"><span class="text-secondary">รวมรายการที่เลือก</span><span id="payrunPicked">0.00</span></div>
+                  <div class="d-flex justify-content-between small"><span class="text-secondary">หักเงินที่จ่ายไว้แล้ว</span><span class="text-danger" id="payrunCredit">0.00</span></div>
+                  <hr class="my-2">
+                  <div class="stat-label">ยอดที่ต้องโอนจริง</div>
                   <div class="stat-value" style="color:#087e45" id="payrunTotal">0.00</div>
                   <div class="small text-secondary" id="payrunCount">ยังไม่ได้เลือกรายการ</div>
                 </div>
@@ -2247,6 +2250,7 @@
 
     // ===== จ่ายเงินโดยเลือกรายการ =====
     let payrunItems = [];
+    let payrunCreditAvailable = 0;
 
     const payrunPicked = () => [...payrunTable.querySelectorAll('input[data-pick]:checked')]
       .map(box => {
@@ -2255,14 +2259,24 @@
         return { key: row.dataset.key, amount: Number(field.value) };
       });
 
+    // ต้องคิดแบบเดียวกับเซิร์ฟเวอร์ เงินที่จ่ายไว้แล้วหักได้เฉพาะรายการที่เป็นบวก
     function renderPayrunTotal() {
       const picked = payrunPicked();
-      const total = picked.reduce((sum, item) => sum + (Number.isFinite(item.amount) ? item.amount : 0), 0);
-      payrunTotal.textContent = baht(total);
-      payrunCount.textContent = picked.length
-        ? `เลือกไว้ ${picked.length} รายการ`
-        : 'ยังไม่ได้เลือกรายการ';
-      payrunSaveBtn.disabled = !picked.length || !(total > 0);
+      const valid = picked.filter(item => Number.isFinite(item.amount));
+      const total = valid.reduce((sum, item) => sum + item.amount, 0);
+      const positive = valid.filter(item => item.amount > 0).reduce((sum, item) => sum + item.amount, 0);
+      const creditUsed = Math.min(payrunCreditAvailable, positive);
+      const transfer = Math.round((total - creditUsed) * 100) / 100;
+      payrunPicked.textContent = baht(total);
+      payrunCredit.textContent = creditUsed ? `−${baht(creditUsed)}` : baht(0);
+      payrunTotal.textContent = baht(Math.max(0, transfer));
+      payrunCount.textContent = !picked.length ? 'ยังไม่ได้เลือกรายการ'
+        : transfer <= 0 ? `เลือกไว้ ${picked.length} รายการ · จ่ายไว้ครบแล้ว ไม่ต้องโอนเพิ่ม`
+        : `เลือกไว้ ${picked.length} รายการ`;
+      payrunSaveBtn.disabled = !picked.length || !(total > 0) || transfer < 0;
+      payrunSaveBtn.innerHTML = transfer <= 0 && picked.length
+        ? '<i class="bi bi-check2-all me-1"></i>บันทึกว่าจ่ายครบแล้ว'
+        : '<i class="bi bi-send-check me-1"></i>บันทึกการจ่าย';
     }
 
     async function loadPayrun() {
@@ -2285,6 +2299,7 @@
         const data = await fetch(`/api/payruns/outstanding?${query}`).then(r => r.json());
         if (data.error) { setSummary(payrunSummary, data.error, true); payrunTable.innerHTML = errorRow(4); return; }
         payrunItems = data.items ?? [];
+        payrunCreditAvailable = Number(data.credit ?? 0);
         const total = payrunItems.reduce((sum, item) => sum + item.amount, 0);
         setSummary(payrunSummary, payrunItems.length
           ? `ค้างจ่ายรวม ${baht(total)} บาท จาก ${payrunItems.length} รายการ`
@@ -2365,7 +2380,9 @@
           payrunMsg.innerHTML = `<span class="text-danger">${esc(result.error ?? 'บันทึกไม่สำเร็จ')}</span>`;
           return;
         }
-        payrunMsg.innerHTML = `<span class="text-success-emphasis">บันทึกการจ่าย ${baht(result.total)} บาท จาก ${result.items} รายการแล้ว</span>`;
+        payrunMsg.innerHTML = `<span class="text-success-emphasis">${result.transfer > 0
+          ? `บันทึกการโอน ${baht(result.transfer)} บาทแล้ว`
+          : 'บันทึกแล้ว ไม่มีการโอนเพิ่ม'}${result.credit_used > 0 ? ` · หักเงินที่จ่ายไว้แล้ว ${baht(result.credit_used)} บาท` : ''}</span>`;
         payrunNote.value = '';
         await loadPayrun();
         loadEntryList();
