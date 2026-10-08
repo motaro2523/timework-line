@@ -682,7 +682,7 @@
               </div>
               <div class="card-body px-4 pb-4">
                 <div class="stat-card mb-3">
-                  <div class="d-flex justify-content-between small"><span class="text-secondary">รวมรายการที่เลือก</span><span id="payrunPicked">0.00</span></div>
+                  <div class="d-flex justify-content-between small"><span class="text-secondary">รวมรายการที่เลือก</span><span id="payrunPickedTotal">0.00</span></div>
                   <div class="d-flex justify-content-between small"><span class="text-secondary">หักเงินที่จ่ายไว้แล้ว</span><span class="text-danger" id="payrunCredit">0.00</span></div>
                   <hr class="my-2">
                   <div class="stat-label">ยอดที่ต้องโอนจริง</div>
@@ -1574,6 +1574,7 @@
         entryEmployee.value = previousEntryEmployee || (employees[0]?.id ?? '');
         renderLeaveControls();
         loadPermissions();
+        fillPayrunEmployees();
         if (activePage === 'settings') loadNotify();
         await loadWeekGrid();
         const checkedIn = new Set(logs.filter(l => l.event_type === 'check_in').map(l => l.employee_code));
@@ -2267,7 +2268,7 @@
       const positive = valid.filter(item => item.amount > 0).reduce((sum, item) => sum + item.amount, 0);
       const creditUsed = Math.min(payrunCreditAvailable, positive);
       const transfer = Math.round((total - creditUsed) * 100) / 100;
-      payrunPicked.textContent = baht(total);
+      payrunPickedTotal.textContent = baht(total);
       payrunCredit.textContent = creditUsed ? `−${baht(creditUsed)}` : baht(0);
       payrunTotal.textContent = baht(Math.max(0, transfer));
       payrunCount.textContent = !picked.length ? 'ยังไม่ได้เลือกรายการ'
@@ -2279,13 +2280,20 @@
         : '<i class="bi bi-send-check me-1"></i>บันทึกการจ่าย';
     }
 
+    // เติมรายชื่อใหม่ทุกครั้ง เพราะหน้านี้อาจถูกเปิดก่อนรายชื่อพนักงานโหลดเสร็จ
+    // ถ้าเติมแค่ครั้งแรก ช่องจะค้างอยู่ที่คำว่า เลือกพนักงาน โดยไม่มีชื่อให้เลือกเลย
+    function fillPayrunEmployees() {
+      const current = payrunEmployee.value;
+      const active = employeeList.filter(e => e.active);
+      payrunEmployee.innerHTML = [`<option value="">${active.length ? 'เลือกพนักงาน' : 'กำลังโหลดรายชื่อ...'}</option>`]
+        .concat(active.map(e =>
+          `<option value="${esc(e.id)}">${esc(e.employee_code)} ${esc(e.name)}</option>`)).join('');
+      if (active.some(e => String(e.id) === current)) payrunEmployee.value = current;
+    }
+
     async function loadPayrun() {
+      fillPayrunEmployees();
       const employeeId = payrunEmployee.value;
-      if (!payrunEmployee.options.length) {
-        payrunEmployee.innerHTML = ['<option value="">เลือกพนักงาน</option>']
-          .concat(employeeList.filter(e => e.active).map(e =>
-            `<option value="${esc(e.id)}">${esc(e.employee_code)} ${esc(e.name)}</option>`)).join('');
-      }
       if (!employeeId) {
         payrunTable.innerHTML = emptyRow(4, 'เลือกพนักงานก่อน');
         payrunHistory.innerHTML = emptyRow(4, 'เลือกพนักงานก่อน');
