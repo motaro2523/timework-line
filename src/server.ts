@@ -672,6 +672,21 @@ async function outstandingItems(employeeId: string, asOf: string) {
       detail: row.note ?? ''
     });
   }
+  // เงินที่จ่ายไปก่อนมีหน้านี้ ยังไม่รู้ว่าจ่ายค่าอะไร แต่ต้องหักออกจากยอดค้าง
+  // ไม่อย่างนั้นหน้าจะชวนให้จ่ายซ้ำสิ่งที่จ่ายไปแล้ว
+  const unlinked = await db.query(`
+    SELECT p.id, to_char(p.entry_date, 'YYYY-MM-DD') AS entry_date, p.amount::float8 AS amount, p.note
+    FROM payroll_entries p
+    WHERE p.employee_id = $1 AND p.kind = 'payment' AND p.entry_date <= $2::date
+      AND NOT EXISTS (SELECT 1 FROM payment_allocations a WHERE a.payment_id = p.id)
+    ORDER BY p.entry_date, p.id`, [employeeId, asOf]);
+  for (const row of unlinked.rows) {
+    items.push({
+      key: `settled:${row.id}`, source: 'settled', amount: round2(-row.amount), locked: true,
+      label: `จ่ายไปแล้วเมื่อ ${formatThaiDay(row.entry_date)}`,
+      detail: row.note ? `${row.note} · บันทึกก่อนมีหน้านี้ จึงไม่รู้ว่าจ่ายค่าอะไร` : 'บันทึกก่อนมีหน้านี้ จึงไม่รู้ว่าจ่ายค่าอะไร'
+    });
+  }
   return { wage_paid_through: paidThrough, as_of: asOf, items };
 }
 
@@ -724,6 +739,7 @@ app.post<{ Body: { employeeId?: string; payDate?: string; method?: string; note?
     const found = available.get(String(item.key ?? ''));
     if (!found) return reply.code(400).send({ error: 'มีรายการที่ไม่อยู่ในยอดค้างแล้ว กรุณากดคำนวณใหม่' });
     if (found.blocked) return reply.code(400).send({ error: String(found.label) });
+    if (found.locked) return reply.code(400).send({ error: 'รายการที่จ่ายไปแล้วเลือกซ้ำไม่ได้' });
     const requested = Number(item.amount ?? found.amount);
     const full = Number(found.amount);
     if (!Number.isFinite(requested) || requested === 0) {

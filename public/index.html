@@ -87,6 +87,7 @@
         <div class="nav-group-label">การเงิน</div>
         <a class="nav-link" href="#pay" data-page="pay"><i class="bi bi-cash-coin me-2"></i><span class="nav-text">เงินค่าตอบแทน</span></a>
         <a class="nav-link" href="#advance" data-page="advance"><i class="bi bi-wallet2 me-2"></i><span class="nav-text">เงินที่เบิก</span></a>
+        <a class="nav-link" href="#payrun" data-page="payrun"><i class="bi bi-send-check me-2"></i><span class="nav-text">จ่ายเงิน</span></a>
         <a class="nav-link d-flex align-items-center" href="#expenses" data-page="expenses">
           <i class="bi bi-receipt me-2"></i><span class="nav-text">รายการค่าใช้จ่าย</span>
           <span class="badge rounded-pill ms-auto d-none" id="pendingExpenseBadge"
@@ -625,6 +626,97 @@
         </div>
       </div>
 
+      <!-- หน้า จ่ายเงิน -->
+      <div id="view-payrun" class="d-none">
+        <section class="table-card card mb-4">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">เลือกคนและวันตัดยอด</h2>
+            <small class="text-secondary" id="payrunSummary">เลือกพนักงานเพื่อดูรายการที่ยังค้างจ่าย</small>
+          </div>
+          <div class="card-body px-4 pb-4">
+            <div class="row g-3">
+              <div class="col-lg-4">
+                <label class="form-label mb-1" for="payrunEmployee">พนักงาน <span class="text-danger">*</span></label>
+                <select class="form-select" id="payrunEmployee"></select>
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label mb-1" for="payrunAsOf">คิดยอดถึงวันที่</label>
+                <input class="form-control" type="date" id="payrunAsOf">
+              </div>
+              <div class="col-lg-5 d-flex align-items-end">
+                <small class="text-secondary" id="payrunPaidThrough"></small>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="row g-4 align-items-start">
+          <div class="col-xl-8">
+            <section class="table-card card mb-4">
+              <div class="card-header bg-white border-0 pt-4 px-4 d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                  <h2 class="h5 fw-bold mb-0">รายการที่ยังค้างจ่าย</h2>
+                  <small class="text-secondary">ติ๊กรายการที่จะจ่ายรอบนี้ แก้จำนวนเพื่อจ่ายบางส่วนได้</small>
+                </div>
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="payrunSelectAll">เลือกทั้งหมด</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="payrunClearAll">ล้าง</button>
+                </div>
+              </div>
+              <div class="card-body p-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+                <thead class="table-light"><tr>
+                  <th class="ps-4" style="width:3rem"></th><th>รายการ</th>
+                  <th class="text-end">ยอดค้าง</th><th class="text-end pe-4" style="width:9rem">จ่ายรอบนี้</th>
+                </tr></thead>
+                <tbody id="payrunTable"><tr><td colspan="4" class="text-center text-secondary py-4">เลือกพนักงานก่อน</td></tr></tbody>
+              </table></div></div>
+              <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>ค่าแรงคิดต่อจากวันที่จ่ายไปแล้วครั้งก่อน จึงไม่ซ้ำและไม่ขาดช่วง · ใบเสร็จขึ้นเป็นรายการของตัวเองหลังผู้ดูแลอนุมัติแล้ว · เงินเบิกล่วงหน้าขึ้นเป็นยอดติดลบเพื่อหักกลบในรอบเดียวกัน</small></div>
+            </section>
+          </div>
+
+          <div class="col-xl-4">
+            <section class="table-card card mb-4">
+              <div class="card-header bg-white border-0 pt-4 px-4">
+                <h2 class="h5 fw-bold mb-0">บันทึกการจ่าย</h2>
+                <small class="text-secondary">ยอดมาจากรายการที่ติ๊กไว้</small>
+              </div>
+              <div class="card-body px-4 pb-4">
+                <div class="stat-card mb-3">
+                  <div class="stat-label">ยอดที่จะจ่ายรอบนี้</div>
+                  <div class="stat-value" style="color:#087e45" id="payrunTotal">0.00</div>
+                  <div class="small text-secondary" id="payrunCount">ยังไม่ได้เลือกรายการ</div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label mb-1" for="payrunDate">วันที่จ่าย <span class="text-danger">*</span></label>
+                  <input class="form-control" type="date" id="payrunDate">
+                </div>
+                <div class="mb-3">
+                  <label class="form-label mb-1" for="payrunMethod">ช่องทาง</label>
+                  <input class="form-control" id="payrunMethod" list="methodOptions" maxlength="20" placeholder="เช่น โอนธนาคาร">
+                </div>
+                <div class="mb-3">
+                  <label class="form-label mb-1" for="payrunNote">หมายเหตุ</label>
+                  <input class="form-control" id="payrunNote" maxlength="160" placeholder="เช่น โอนพร้อมเพย์ 08/10">
+                </div>
+                <button class="btn btn-success w-100 py-2 fw-bold" id="payrunSaveBtn" disabled><i class="bi bi-send-check me-1"></i>บันทึกการจ่าย</button>
+                <div class="small mt-2" id="payrunMsg"></div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <section class="table-card card">
+          <div class="card-header bg-white border-0 pt-4 px-4">
+            <h2 class="h5 fw-bold mb-0">ประวัติการจ่ายของคนนี้</h2>
+            <small class="text-secondary" id="payrunHistorySummary">เลือกพนักงานก่อน</small>
+          </div>
+          <div class="card-body p-0"><div class="table-responsive"><table class="table align-middle mb-0">
+            <thead class="table-light"><tr><th class="ps-4">วันที่จ่าย</th><th>จ่ายค่าอะไรบ้าง</th><th>ช่องทาง</th><th class="text-end pe-4">จำนวน</th></tr></thead>
+            <tbody id="payrunHistory"><tr><td colspan="4" class="text-center text-secondary py-4">เลือกพนักงานก่อน</td></tr></tbody>
+          </table></div></div>
+        </section>
+      </div>
+
       <!-- หน้า รายการค่าใช้จ่าย -->
       <div id="view-expenses" class="d-none">
         <div class="row g-4 align-items-start">
@@ -1143,6 +1235,7 @@
       reports:   { title:'รายงาน',       subtitle:'สรุปเวลาทำงาน สาย OT และการลา คิดตามกะ',      action:'none'     },
       pay:       { title:'เงินค่าตอบแทน',  subtitle:'ค่าแรง OT และยอดคงเหลือรอจ่ายของพนักงานทุกคน',  action:'none'     },
       advance:   { title:'เงินที่เบิก',     subtitle:'บันทึกเงินเบิกล่วงหน้าและการจ่ายเงินให้พนักงาน',   action:'none'     },
+      payrun:    { title:'จ่ายเงิน',        subtitle:'เลือกรายการที่จ่าย แล้วบันทึกการโอนหรือจ่ายสด',   action:'none'     },
       expenses:  { title:'รายการเงินค่าใช้จ่าย', subtitle:'ตรวจและอนุมัติรายการที่พนักงานส่งเข้ามาผ่าน LINE', action:'none' },
       settings:  { title:'ตั้งค่า',        subtitle:'แผนก ประเภทพนักงาน และวิธีจ่ายค่าตอบแทน',      action:'settings' },
       admins:    { title:'คำขอใช้งานและผู้ดูแลระบบ', subtitle:'อนุมัติแล้วผู้ขอจะเข้าสู่ระบบได้ทันที',  action:'none'     },
@@ -2152,6 +2245,139 @@
       }
     });
 
+    // ===== จ่ายเงินโดยเลือกรายการ =====
+    let payrunItems = [];
+
+    const payrunPicked = () => [...payrunTable.querySelectorAll('input[data-pick]:checked')]
+      .map(box => {
+        const row = box.closest('tr[data-key]');
+        const field = row.querySelector('input[data-amount]');
+        return { key: row.dataset.key, amount: Number(field.value) };
+      });
+
+    function renderPayrunTotal() {
+      const picked = payrunPicked();
+      const total = picked.reduce((sum, item) => sum + (Number.isFinite(item.amount) ? item.amount : 0), 0);
+      payrunTotal.textContent = baht(total);
+      payrunCount.textContent = picked.length
+        ? `เลือกไว้ ${picked.length} รายการ`
+        : 'ยังไม่ได้เลือกรายการ';
+      payrunSaveBtn.disabled = !picked.length || !(total > 0);
+    }
+
+    async function loadPayrun() {
+      const employeeId = payrunEmployee.value;
+      if (!payrunEmployee.options.length) {
+        payrunEmployee.innerHTML = ['<option value="">เลือกพนักงาน</option>']
+          .concat(employeeList.filter(e => e.active).map(e =>
+            `<option value="${esc(e.id)}">${esc(e.employee_code)} ${esc(e.name)}</option>`)).join('');
+      }
+      if (!employeeId) {
+        payrunTable.innerHTML = emptyRow(4, 'เลือกพนักงานก่อน');
+        payrunHistory.innerHTML = emptyRow(4, 'เลือกพนักงานก่อน');
+        setSummary(payrunSummary, 'เลือกพนักงานเพื่อดูรายการที่ยังค้างจ่าย');
+        payrunPaidThrough.textContent = '';
+        renderPayrunTotal();
+        return;
+      }
+      try {
+        const query = `employeeId=${employeeId}&asOf=${payrunAsOf.value || ''}`;
+        const data = await fetch(`/api/payruns/outstanding?${query}`).then(r => r.json());
+        if (data.error) { setSummary(payrunSummary, data.error, true); payrunTable.innerHTML = errorRow(4); return; }
+        payrunItems = data.items ?? [];
+        const total = payrunItems.reduce((sum, item) => sum + item.amount, 0);
+        setSummary(payrunSummary, payrunItems.length
+          ? `ค้างจ่ายรวม ${baht(total)} บาท จาก ${payrunItems.length} รายการ`
+          : 'ไม่มีรายการค้างจ่าย');
+        payrunPaidThrough.textContent = data.wage_paid_through
+          ? `จ่ายค่าแรงถึงวันที่ ${formatDay(data.wage_paid_through)} แล้ว`
+          : 'ยังไม่เคยบันทึกการจ่ายค่าแรงผ่านหน้านี้';
+        payrunTable.innerHTML = payrunItems.length ? payrunItems.map(item => `<tr data-key="${esc(item.key)}">
+          <td class="ps-4">${item.blocked || item.locked ? '' : `<input class="form-check-input" type="checkbox" data-pick>`}</td>
+          <td>
+            <div class="${item.blocked ? 'text-danger' : 'fw-semibold'}">${esc(item.label)}</div>
+            ${item.detail ? `<div class="small text-secondary">${esc(item.detail)}</div>` : ''}
+          </td>
+          <td class="text-end ${item.amount < 0 ? 'text-danger' : ''}">${item.blocked ? dash : baht(item.amount)}</td>
+          <td class="pe-4">${item.blocked || item.locked ? '<span class="text-secondary small">หักออกแล้ว</span>' :
+            `<input class="form-control form-control-sm text-end" type="number" step="0.01" data-amount value="${item.amount}">`}</td>
+        </tr>`).join('') : emptyRow(4, 'ไม่มีรายการค้างจ่าย');
+        renderPayrunTotal();
+        await loadPayrunHistory(employeeId);
+      } catch {
+        setSummary(payrunSummary, 'ไม่สามารถเชื่อมต่อ API ได้', true);
+        payrunTable.innerHTML = errorRow(4);
+      }
+    }
+
+    async function loadPayrunHistory(employeeId) {
+      try {
+        const rows = await fetch(`/api/payroll/entries?from=2000-01-01&to=2100-12-31&kind=payment`).then(r => r.json());
+        const mine = (Array.isArray(rows) ? rows : []).filter(row => String(row.employee_id ?? '') === String(employeeId));
+        setSummary(payrunHistorySummary, mine.length ? `จ่ายไปแล้ว ${mine.length} ครั้ง` : 'ยังไม่เคยจ่ายให้คนนี้');
+        if (!mine.length) { payrunHistory.innerHTML = emptyRow(4, 'ยังไม่เคยจ่ายให้คนนี้'); return; }
+        const details = await Promise.all(mine.map(row =>
+          fetch(`/api/payroll/entries/${row.id}/allocations`).then(r => r.json()).catch(() => [])));
+        payrunHistory.innerHTML = mine.map((row, index) => {
+          const parts = Array.isArray(details[index]) ? details[index] : [];
+          return `<tr>
+            <td class="ps-4 text-nowrap">${esc(formatDay(row.entry_date))}</td>
+            <td class="small">${parts.length
+              ? parts.map(part => `<div>${esc(part.label)} <span class="text-secondary">${baht(part.amount)}</span></div>`).join('')
+              : `<span class="text-secondary">${esc(row.note) || 'บันทึกก่อนมีหน้านี้ จึงไม่รู้ว่าจ่ายค่าอะไร'}</span>`}</td>
+            <td class="text-nowrap">${esc(row.method) || dash}</td>
+            <td class="text-end pe-4 fw-semibold">${baht(row.amount)}</td>
+          </tr>`;
+        }).join('');
+      } catch {
+        payrunHistory.innerHTML = errorRow(4);
+      }
+    }
+
+    payrunEmployee.addEventListener('change', loadPayrun);
+    payrunAsOf.addEventListener('change', loadPayrun);
+    payrunTable.addEventListener('change', renderPayrunTotal);
+    payrunTable.addEventListener('input', event => { if (event.target.matches('[data-amount]')) renderPayrunTotal(); });
+    payrunSelectAll.addEventListener('click', () => {
+      payrunTable.querySelectorAll('input[data-pick]').forEach(box => { box.checked = true; });
+      renderPayrunTotal();
+    });
+    payrunClearAll.addEventListener('click', () => {
+      payrunTable.querySelectorAll('input[data-pick]').forEach(box => { box.checked = false; });
+      renderPayrunTotal();
+    });
+
+    payrunSaveBtn.addEventListener('click', async () => {
+      const items = payrunPicked();
+      if (!items.length) return;
+      const label = payrunSaveBtn.innerHTML;
+      payrunSaveBtn.disabled = true;
+      payrunSaveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังบันทึก';
+      payrunMsg.textContent = '';
+      try {
+        const response = await fetch('/api/payruns', {
+          method:'POST', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ employeeId: payrunEmployee.value, payDate: payrunDate.value,
+            method: payrunMethod.value, note: payrunNote.value, items })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          payrunMsg.innerHTML = `<span class="text-danger">${esc(result.error ?? 'บันทึกไม่สำเร็จ')}</span>`;
+          return;
+        }
+        payrunMsg.innerHTML = `<span class="text-success-emphasis">บันทึกการจ่าย ${baht(result.total)} บาท จาก ${result.items} รายการแล้ว</span>`;
+        payrunNote.value = '';
+        await loadPayrun();
+        loadEntryList();
+        loadPayroll();
+      } catch {
+        payrunMsg.innerHTML = '<span class="text-danger">ไม่สามารถเชื่อมต่อ API ได้</span>';
+      } finally {
+        payrunSaveBtn.innerHTML = label;
+        renderPayrunTotal();
+      }
+    });
+
     // ===== ผู้ดูแลระบบ =====
     const ROLE_LABEL = { admin:'ผู้ดูแลระบบ', hr:'ฝ่ายบุคคล', finance:'การเงิน', lead:'หัวหน้าแผนก' };
     const roleBadge = role => {
@@ -3116,6 +3342,7 @@
       reports: () => [loadReport()],
       pay: () => [loadPayroll(), loadOt()],
       advance: () => [loadEntryList()],
+      payrun: () => [loadPayrun()],
       expenses: () => [loadClaims(), loadPermissions()],
       admins: () => [loadAdmins()],
       roles: () => [loadRoleMatrix()],
@@ -3250,7 +3477,7 @@
     const PAGE_PERMISSION = {
       overview:'overview', employees:'employees', shifts:'shifts', schedule:'schedule', leaves:'leaves',
       logs:'logs', missing:'missing', reports:'reports', pay:'pay', advance:'advance',
-      expenses:'expenses', settings:'settings', admins:'admins', roles:'admins'
+      expenses:'expenses', settings:'settings', admins:'admins', roles:'admins', payrun:'advance'
     };
     const ROLE_BADGE = {
       admin:['#d7f2e3','#0b5f38'], hr:['#e3f2fd','#01579b'],
@@ -3324,6 +3551,8 @@
     missingFrom.value = monthFirst;
     missingTo.value = monthLast;
     entryDate.value = bangkokToday();
+    payrunDate.value = bangkokToday();
+    payrunAsOf.value = bangkokToday();
     applyFinanceMonth();
     route();
     loadMe();
