@@ -607,34 +607,37 @@ async function wagePaidThrough(employeeId: string): Promise<string | null> {
 
 async function outstandingItems(employeeId: string, asOf: string) {
   const paidThrough = await wagePaidThrough(employeeId);
-  // ยังไม่เคยจ่ายค่าแรงเลย เริ่มนับจากวันแรกที่มีข้อมูลของคนนั้น
-  const startRow = await db.query(`
-    SELECT to_char(LEAST(
-      COALESCE((SELECT MIN((occurred_at AT TIME ZONE 'Asia/Bangkok')::date) FROM time_logs WHERE employee_id = $1), $2::date),
-      COALESCE((SELECT start_date FROM employees WHERE id = $1), $2::date)
-    ), 'YYYY-MM-DD') AS first_day`, [employeeId, asOf]);
-  const wageFrom = paidThrough
-    ? new Date(Date.parse(`${paidThrough}T00:00:00Z`) + 86400000).toISOString().slice(0, 10)
-    : startRow.rows[0].first_day;
-
+  // ค่าแรงค้าง = ค่าแรงที่ทำได้ทั้งหมดถึงวันนี้ ลบ ค่าแรงที่ถูกผูกจ่ายไปแล้ว
+  // คิดจากจำนวนเงิน ไม่ใช่จากวันที่ เพราะถ้าจ่ายบางส่วน ส่วนที่เหลือต้องยังอยู่
+  // (เคยคิดจากวันที่จ่ายถึง แล้วส่วนที่เหลือหายไปเงียบๆ เมื่อจ่ายค่าแรงไม่เต็มก้อน)
+  const ledgerFrom = await ledgerStartDate();
   const items: Record<string, unknown>[] = [];
-  if (wageFrom <= asOf) {
-    const payroll = await computePayroll(wageFrom, asOf, employeeId, '');
+  if (ledgerFrom <= asOf) {
+    const payroll = await computePayroll(ledgerFrom, asOf, employeeId, '');
     const row = payroll[0];
     if (row && row.has_type) {
-      // ค่าใช้จ่ายไม่รวมในก้อนนี้ เพราะแยกเป็นรายการของตัวเองด้านล่าง
-      const wage = round2(row.base_pay + row.ot_pay - row.absent_deduct - row.late_deduct);
-      if (wage !== 0) {
+      const earned = round2(row.base_pay + row.ot_pay - row.absent_deduct - row.late_deduct);
+      const allocatedRow = await db.query(`
+        SELECT COALESCE(SUM(a.amount), 0)::float8 AS paid
+        FROM payment_allocations a JOIN payroll_entries p ON p.id = a.payment_id
+        WHERE p.employee_id = $1 AND a.source = 'wage'`, [employeeId]);
+      const paid = round2(Number(allocatedRow.rows[0].paid));
+      const remaining = round2(earned - paid);
+      if (Math.abs(remaining) >= 0.01) {
         items.push({
-          key: `wage:${wageFrom}:${asOf}`, source: 'wage', amount: wage,
-          label: `ค่าแรงและ OT ${formatThaiRange(wageFrom, asOf)}`,
-          detail: `ทำงาน ${row.worked_days} วัน · ค่าแรง ${row.base_pay} · OT ${row.ot_pay} · หัก ${round2(row.absent_deduct + row.late_deduct)}`,
-          wage_from: wageFrom, wage_to: asOf
+          key: `wage:${asOf}`, source: 'wage', amount: remaining,
+          locked: remaining < 0,
+          label: remaining > 0
+            ? `ค่าแรงและ OT ค้างจ่าย ถึง ${formatThaiDay(asOf)}`
+            : `จ่ายค่าแรงเกินไปแล้ว ถึง ${formatThaiDay(asOf)}`,
+          detail: `ทำได้ ${earned.toLocaleString('th-TH', { minimumFractionDigits: 2 })} · จ่ายแล้ว ${paid.toLocaleString('th-TH', { minimumFractionDigits: 2 })} `
+            + `· ทำงาน ${row.worked_days} วัน ตั้งแต่ ${formatThaiDay(ledgerFrom)}`,
+          wage_from: ledgerFrom, wage_to: asOf
         });
       }
     } else if (row) {
       items.push({ key: 'wage:none', source: 'wage', amount: 0, blocked: true,
-        label: 'ยังกำหนดประเภทพนักงานไม่ครบ จึงคิดค่าแรงไม่ได้', detail: '', wage_from: wageFrom, wage_to: asOf });
+        label: 'ยังกำหนดประเภทพนักงานไม่ครบ จึงคิดค่าแรงไม่ได้', detail: '', wage_from: ledgerFrom, wage_to: asOf });
     }
   }
 
