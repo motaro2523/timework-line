@@ -1548,6 +1548,13 @@ app.post<{ Body: { accessToken?: string; month?: string } }>('/api/liff/summary'
   const { from, to } = monthRangeOf(month);
 
   const payroll = await computePayroll(from, to, String(me.id), '');
+  // พนักงานต้องเห็นยอดเดียวกับที่ผู้ดูแลเห็น จึงคิดยอดค้างแบบสะสมถึงวันนี้เหมือนกัน
+  const ledgerFrom = await ledgerStartDate();
+  const ledgerTo = to > bangkokDate() ? to : bangkokDate();
+  const cumulative = ledgerFrom === from && ledgerTo === to
+    ? payroll
+    : await computePayroll(ledgerFrom, ledgerTo, String(me.id), '');
+  if (payroll[0]) payroll[0].outstanding = cumulative[0] ? cumulative[0].balance : payroll[0].balance;
   const entries = await db.query(`
     SELECT to_char(entry_date, 'YYYY-MM-DD') AS entry_date, kind, amount::float8 AS amount, method, note
     FROM payroll_entries
@@ -2176,6 +2183,22 @@ async function computePayroll(from: string, to: string, employeeId: string, depa
   return payroll;
 }
 
+// วันแรกที่ระบบมีข้อมูล ใช้เป็นจุดตั้งต้นของยอดค้างสะสม
+// แคชไว้เพราะค่าแทบไม่เปลี่ยน และถูกเรียกทุกครั้งที่เปิดหน้าค่าตอบแทน
+let ledgerStartCache: { value: string; at: number } | null = null;
+async function ledgerStartDate(): Promise<string> {
+  if (ledgerStartCache && Date.now() - ledgerStartCache.at < 300_000) return ledgerStartCache.value;
+  const { rows } = await db.query(`
+    SELECT to_char(LEAST(
+      COALESCE((SELECT MIN((occurred_at AT TIME ZONE 'Asia/Bangkok')::date) FROM time_logs), CURRENT_DATE),
+      COALESCE((SELECT MIN(start_date) FROM employees WHERE start_date IS NOT NULL), CURRENT_DATE),
+      COALESCE((SELECT MIN(entry_date) FROM payroll_entries), CURRENT_DATE),
+      COALESCE((SELECT MIN(claim_date) FROM expense_claims), CURRENT_DATE)
+    ), 'YYYY-MM-DD') AS first_day`);
+  ledgerStartCache = { value: rows[0].first_day, at: Date.now() };
+  return ledgerStartCache.value;
+}
+
 app.get<{ Querystring: { from?: string; to?: string; employeeId?: string; departmentId?: string } }>('/api/payroll', async (request, reply) => {
   const from = parseIsoDate((request.query.from ?? '').trim());
   const to = parseIsoDate((request.query.to ?? '').trim());
@@ -2188,7 +2211,27 @@ app.get<{ Querystring: { from?: string; to?: string; employeeId?: string; depart
   const departmentFilter = parseFilterId(request.query.departmentId);
   if (departmentFilter.error) return reply.code(400).send({ error: 'รหัสอ้างอิงแผนกไม่ถูกต้อง' });
   const rows = await computePayroll(from.value!, to.value!, employeeId, departmentFilter.value!);
-  return { from: from.value, to: to.value, rows };
+
+  // ยอดค้างสะสมคิด "ถึงวันนี้" เสมอ ไม่ใช่ถึงสิ้นช่วงที่เลือก
+  // เพราะคำถามที่ต้องตอบคือยังต้องจ่ายอีกเท่าไร ไม่ใช่ว่าเมื่อสิ้นเดือนนั้นค้างเท่าไร
+  // เงินที่จ่ายในเดือนถัดมาเพื่อปิดหนี้เดือนก่อน จึงถูกหักออกให้เห็น
+  const ledgerFrom = await ledgerStartDate();
+  const ledgerTo = to.value! > bangkokDate() ? to.value! : bangkokDate();
+  const sameSpan = ledgerFrom === from.value! && ledgerTo === to.value!;
+  const cumulative = sameSpan
+    ? rows
+    : await computePayroll(ledgerFrom, ledgerTo, employeeId, departmentFilter.value!);
+  const outstandingBy = new Map(cumulative.map(row => [String(row.employee_id), row]));
+  const merged = rows.map(row => {
+    const total = outstandingBy.get(String(row.employee_id));
+    return {
+      ...row,
+      outstanding: total ? total.balance : row.balance,
+      paid_to_date: total ? round2(total.advance_total + total.payment_total) : round2(row.advance_total + row.payment_total),
+      earned_to_date: total ? total.net_pay : row.net_pay
+    };
+  });
+  return { from: from.value, to: to.value, ledger_from: ledgerFrom, ledger_to: ledgerTo, rows: merged };
 });
 
 app.get<{ Querystring: { from?: string; to?: string; employeeId?: string; departmentId?: string } }>('/api/reports/attendance', async (request, reply) => {

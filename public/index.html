@@ -498,7 +498,7 @@
           <div class="col-6 col-xl-3"><div class="stat-card"><div class="stat-label">ค่าแรงรวม</div><div class="stat-value" style="color:#263238" id="payStatWage">0.00</div></div></div>
           <div class="col-6 col-xl-3"><div class="stat-card"><div class="stat-label">ค่า OT ที่อนุมัติ</div><div class="stat-value" style="color:#0277bd" id="payStatOt">0.00</div></div></div>
           <div class="col-6 col-xl-3"><div class="stat-card"><div class="stat-label">หักสาย/ขาดงาน</div><div class="stat-value" style="color:#c62828" id="payStatDeduct">0.00</div></div></div>
-          <div class="col-6 col-xl-3"><div class="stat-card"><div class="stat-label">คงเหลือรอจ่าย</div><div class="stat-value" style="color:#087e45" id="payStatBalance">0.00</div></div></div>
+          <div class="col-6 col-xl-3"><div class="stat-card"><div class="stat-label">ค้างจ่ายสะสมถึงวันนี้</div><div class="stat-value" style="color:#087e45" id="payStatBalance">0.00</div><div class="small text-secondary">นับทุกเดือนรวมกัน</div></div></div>
         </div>
 <section class="table-card card mb-4">
           <div class="card-header bg-white border-0 pt-4 px-4">
@@ -521,12 +521,12 @@
               <th class="text-end">ทำงาน</th><th class="text-end">ขาด</th><th class="text-end">ลา</th>
               <th class="text-end">ค่าแรง</th><th class="text-end">OT</th><th class="text-end">หัก</th><th class="text-end">ค่าใช้จ่ายอนุมัติ</th>
               <th class="text-end">ยอดสุทธิ</th><th class="text-end">เบิก</th><th class="text-end">จ่ายแล้ว</th>
-              <th class="text-end pe-4">คงเหลือ</th>
+              <th class="text-end pe-4">ค้างถึงวันนี้</th>
             </tr></thead>
             <tbody id="payrollTable"><tr><td colspan="13" class="text-center text-secondary py-4">กำลังโหลดข้อมูล...</td></tr></tbody>
             <tfoot id="payrollFoot"></tfoot>
           </table></div></div>
-          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i>รายวันจ่ายตามจำนวนวันที่มาทำงาน รายเดือนจ่ายเต็มเดือนแล้วหักวันขาดงานตามฐานวันต่อเดือน OT คิดจากค่าแรงต่อชั่วโมงคูณอัตรา OT ของประเภท ชี้เมาส์ที่ตัวเลขเพื่อดูที่มาของยอด แก้กฎได้ที่หน้าตั้งค่า</small></div>
+          <div class="card-footer bg-white border-0 px-4 pb-4 pt-0"><small class="text-secondary"><i class="bi bi-info-circle me-1"></i><strong>ช่อง ค้างถึงวันนี้ นับทุกอย่างตั้งแต่เริ่มใช้ระบบจนถึงวันนี้ ไม่ใช่เฉพาะช่วงที่เลือก</strong> เงินที่จ่ายเดือนถัดไปเพื่อปิดหนี้เดือนก่อนจึงถูกหักออกให้แล้ว ติดลบแปลว่าจ่ายเกิน · ช่อง เบิก กับ จ่ายแล้ว ยังเป็นตัวเลขเฉพาะช่วงที่เลือก · รายวันจ่ายตามจำนวนวันที่มาทำงาน รายเดือนจ่ายเต็มเดือนแล้วหักวันขาดงานตามฐานวันต่อเดือน OT คิดจากค่าแรงต่อชั่วโมงคูณอัตรา OT ของประเภท ชี้เมาส์ที่ตัวเลขเพื่อดูที่มาของยอด แก้กฎได้ที่หน้าตั้งค่า</small></div>
         </section>
 
 <section class="table-card card mb-4">
@@ -2731,7 +2731,7 @@
         const withoutType = payrollRows.filter(row => !row.has_type).length;
         const totals = payrollRows.reduce((sum, row) => ({
           net: sum.net + row.net_pay, advance: sum.advance + row.advance_total,
-          paid: sum.paid + row.payment_total, balance: sum.balance + row.balance,
+          paid: sum.paid + row.payment_total, balance: sum.balance + (row.outstanding ?? row.balance),
           wage: sum.wage + row.base_pay, ot: sum.ot + row.ot_pay,
           deduct: sum.deduct + row.absent_deduct + row.late_deduct,
           expense: sum.expense + (row.approved_expense ?? 0)
@@ -2741,8 +2741,8 @@
         payStatDeduct.textContent = totals.deduct ? `-${baht(totals.deduct)}` : baht(0);
         payStatBalance.textContent = baht(totals.balance);
         setSummary(payrollSummary, `${formatDay(payrollFrom.value)} ถึง ${formatDay(payrollTo.value)}`
-          + ` · พนักงาน ${payrollRows.length} คน · ยอดสุทธิรวม ${baht(totals.net)} บาท`
-          + ` · คงเหลือที่ต้องจ่าย ${baht(totals.balance)} บาท`
+          + ` · พนักงาน ${payrollRows.length} คน · ยอดสุทธิในช่วงนี้ ${baht(totals.net)} บาท`
+          + ` · ค้างจ่ายสะสมถึงวันนี้ ${baht(totals.balance)} บาท`
           + (withoutType ? ` · ยังไม่กำหนดประเภท ${withoutType} คน จึงคิดเงินไม่ได้` : ''));
 
         payrollTable.innerHTML = payrollRows.length ? payrollRows.map(row => {
@@ -2765,12 +2765,13 @@
             <td class="text-end fw-semibold">${row.has_type ? baht(row.net_pay) : dash}</td>
             <td class="text-end text-secondary">${row.advance_total ? baht(row.advance_total) : ''}</td>
             <td class="text-end text-secondary">${row.payment_total ? baht(row.payment_total) : ''}</td>
-            <td class="text-end pe-4 fw-semibold ${row.balance > 0 ? 'text-success-emphasis' : row.balance < 0 ? 'text-danger' : ''}">${row.has_type ? baht(row.balance) : dash}</td>
+            <td class="text-end pe-4 fw-semibold ${row.outstanding > 0 ? 'text-success-emphasis' : row.outstanding < 0 ? 'text-danger' : ''}"
+                title="ยอดค้างสะสมถึงวันนี้ นับทุกอย่างตั้งแต่เริ่มใช้ระบบ ไม่ใช่เฉพาะช่วงที่เลือก${row.outstanding < 0 ? ' · ติดลบแปลว่าจ่ายเกินไปแล้ว' : ''}">${row.has_type ? baht(row.outstanding) : dash}</td>
           </tr>`;
         }).join('') : emptyRow(13,'ไม่มีข้อมูลในช่วงที่เลือก');
 
         payrollFoot.innerHTML = payrollRows.length ? `<tr class="table-light">
-          <td class="ps-4 fw-semibold" colspan="8">รวมทั้งช่วง</td>
+          <td class="ps-4 fw-semibold" colspan="8">รวมทั้งช่วง · ช่องขวาสุดเป็นยอดสะสมถึงวันนี้</td>
           <td class="text-end">${totals.expense ? `+${baht(totals.expense)}` : ''}</td>
           <td class="text-end fw-semibold">${baht(totals.net)}</td>
           <td class="text-end">${baht(totals.advance)}</td>
@@ -2850,11 +2851,11 @@
     function downloadPayrollCsv() {
       if (!payrollRows.length) return;
       const header = ['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','ประเภท','วิธีจ่าย','อัตรา','วันทำงาน','ขาดงาน','วันลา',
-        'สาย (นาที)','OT (นาที)','ค่าแรงพื้นฐาน','ค่า OT','หักขาดงาน','หักสาย','ค่าใช้จ่ายที่อนุมัติ','ยอดสุทธิ','เบิกล่วงหน้า','จ่ายแล้ว','คงเหลือ'];
+        'สาย (นาที)','OT (นาที)','ค่าแรงพื้นฐาน','ค่า OT','หักขาดงาน','หักสาย','ค่าใช้จ่ายที่อนุมัติ','ยอดสุทธิในช่วง','เบิกในช่วง','จ่ายแล้วในช่วง','ค้างสะสมถึงวันนี้'];
       const lines = [header].concat(payrollRows.map(row => [row.employee_code, row.name, row.department_name ?? '', row.employee_type_name ?? '',
         row.pay_type ? payMethod(row.pay_type) : '', row.pay_rate ?? '', row.worked_days, row.absent_days, row.leave_days,
         row.late_minutes, row.ot_minutes, row.base_pay, row.ot_pay, row.absent_deduct, row.late_deduct,
-        row.approved_expense ?? 0, row.net_pay, row.advance_total, row.payment_total, row.balance]));
+        row.approved_expense ?? 0, row.net_pay, row.advance_total, row.payment_total, row.outstanding ?? row.balance]));
       const csv = '\uFEFF' + lines.map(line => line.map(value => `"${String(value ?? '').replace(/"/g,'""')}"`).join(',')).join('\r\n');
       const link = document.createElement('a');
       link.href = URL.createObjectURL(new Blob([csv], { type:'text/csv;charset=utf-8' }));

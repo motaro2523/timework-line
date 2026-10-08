@@ -31,7 +31,7 @@ const goto = async h => { w.location.hash = h; w.dispatchEvent(new w.HashChangeE
 
   console.log('--- โครงหน้า ---');
   const views = [...d.querySelectorAll('[id^=view-]')];
-  check(`มีครบ 14 หน้า (พบ ${views.length})`, views.length === 14);
+  check(`มีครบ 15 หน้า (พบ ${views.length})`, views.length === 15);
   check('ทุกหน้าอยู่ใน <main> ไม่หลุดออกนอก', views.every(v => v.parentElement.tagName === 'MAIN'));
   check('ไม่มี JavaScript error ตอนโหลด', errors.length === 0);
   if (errors.length) console.log('     ', errors.slice(0,2).join(' | '));
@@ -40,7 +40,7 @@ const goto = async h => { w.location.hash = h; w.dispatchEvent(new w.HashChangeE
   for (const [hash, id, min] of [['#overview','view-overview',1], ['#employees','view-employees',1],
       ['#shifts','view-shifts',1], ['#schedule','view-schedule',1], ['#leaves','view-leaves',1],
       ['#logs','view-logs',1], ['#missing','view-missing',1], ['#reports','view-reports',1],
-      ['#pay','view-pay',2], ['#advance','view-advance',2], ['#expenses','view-expenses',2],
+      ['#pay','view-pay',2], ['#advance','view-advance',2], ['#payrun','view-payrun',3], ['#expenses','view-expenses',2],
       ['#settings','view-settings',4], ['#admins','view-admins',2], ['#roles','view-roles',1]]) {
     await goto(hash);
     const view = d.getElementById(id);
