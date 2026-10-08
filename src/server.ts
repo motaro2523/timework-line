@@ -724,7 +724,7 @@ app.get<{ Params: { id: string } }>('/api/payroll/entries/:id/allocations', asyn
 type PayRunItem = { key?: string; source?: string; expenseId?: string; advanceId?: string;
   wageFrom?: string; wageTo?: string; amount?: number | string; label?: string };
 
-app.post<{ Body: { employeeId?: string; payDate?: string; method?: string; note?: string; items?: PayRunItem[] } }>(
+app.post<{ Body: { employeeId?: string; payDate?: string; asOf?: string; method?: string; note?: string; items?: PayRunItem[] } }>(
   '/api/payruns', async (request, reply) => {
   if (!canWrite(request.admin?.permissions.advance ?? 'none')) {
     return reply.code(403).send({ error: 'ไม่มีสิทธิ์บันทึกการจ่ายเงิน' });
@@ -738,14 +738,19 @@ app.post<{ Body: { employeeId?: string; payDate?: string; method?: string; note?
   if (items.length > 200) return reply.code(400).send({ error: 'เลือกรายการได้ไม่เกิน 200 รายการต่อครั้ง' });
 
   // ตรวจกับรายการค้างจริงฝั่งเซิร์ฟเวอร์เสมอ ไม่เชื่อยอดที่หน้าจอส่งมา
-  const outstanding = await outstandingItems(employeeId, payDate.value!);
+  // ต้องคิดถึงวันเดียวกับที่หน้าจอคิด (คิดยอดถึงวันที่) ไม่ใช่วันที่จ่าย
+  // เพราะลงวันที่จ่ายย้อนหลังได้ เช่นจ่ายเงินเดือนกันยายนแต่ลงวันที่ 30 ก.ย.
+  // ถ้าใช้วันที่จ่าย รายการหลังวันนั้นจะหายไป แล้วบันทึกไม่ผ่านทั้งที่ติ๊กถูก
+  const asOf = parseIsoDate(String(request.body?.asOf ?? '').trim() || bangkokDate());
+  if (asOf.error) return reply.code(400).send({ error: asOf.error });
+  const outstanding = await outstandingItems(employeeId, asOf.value!);
   const available = new Map(outstanding.items.map(item => [item.key as string, item]));
 
   const prepared: { source: string; expenseId: string | null; advanceId: string | null;
     wageFrom: string | null; wageTo: string | null; amount: number; label: string }[] = [];
   for (const item of items) {
     const found = available.get(String(item.key ?? ''));
-    if (!found) return reply.code(400).send({ error: 'มีรายการที่ไม่อยู่ในยอดค้างแล้ว กรุณากดคำนวณใหม่' });
+    if (!found) return reply.code(409).send({ error: 'รายการค้างเปลี่ยนไประหว่างที่เปิดหน้านี้ เช่นมีคนบันทึกจ่ายหรือลบรายการไปแล้ว กรุณาเลือกพนักงานใหม่อีกครั้งเพื่อโหลดรายการล่าสุด' });
     if (found.blocked) return reply.code(400).send({ error: String(found.label) });
     if (found.locked) return reply.code(400).send({ error: 'รายการที่จ่ายไปแล้วเลือกซ้ำไม่ได้' });
     const requested = Number(item.amount ?? found.amount);

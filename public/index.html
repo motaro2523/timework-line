@@ -2381,7 +2381,7 @@
         const response = await fetch('/api/payruns', {
           method:'POST', headers:{ 'Content-Type':'application/json' },
           body: JSON.stringify({ employeeId: payrunEmployee.value, payDate: payrunDate.value,
-            method: payrunMethod.value, note: payrunNote.value, items })
+            asOf: payrunAsOf.value, method: payrunMethod.value, note: payrunNote.value, items })
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
