@@ -1349,7 +1349,7 @@ app.post<{ Body: { accessToken?: string; month?: string } }>('/api/liff/summary'
   const expenses = await db.query(`
     SELECT id, to_char(claim_date, 'YYYY-MM-DD') AS claim_date, category, amount::float8 AS amount,
            detail, status, approved_amount::float8 AS approved_amount, review_note,
-           (photo_file IS NOT NULL) AS has_photo
+           (photo_file IS NOT NULL) AS has_photo, photo_mime
     FROM expense_claims
     WHERE employee_id = $1 AND claim_date BETWEEN $2::date AND $3::date
     ORDER BY claim_date DESC, id DESC
@@ -1593,7 +1593,7 @@ app.get<{ Querystring: { from?: string; to?: string; status?: string; employeeId
            c.approved_amount::float8 AS approved_amount, c.review_note,
            to_char(c.created_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI') AS created_at,
            to_char(c.reviewed_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI') AS reviewed_at,
-           (c.photo_file IS NOT NULL) AS has_photo
+           (c.photo_file IS NOT NULL) AS has_photo, c.photo_mime
     FROM expense_claims c
     JOIN employees e ON e.id = c.employee_id
     LEFT JOIN departments d ON d.id = e.department_id

@@ -87,10 +87,13 @@
           <input class="form-control" id="expenseDetail" maxlength="200" placeholder="เช่น ค่าแท็กซี่ไปประชุม">
         </div>
         <div class="mb-3">
-          <label class="form-label small mb-1" for="expensePhoto">รูปใบเสร็จ (ถ้ามี)</label>
-          <input class="form-control" type="file" id="expensePhoto" accept="image/*">
+          <label class="form-label small mb-1" for="expensePhoto">ใบเสร็จ (ถ้ามี) · รูปภาพหรือ PDF</label>
+          <input class="form-control" type="file" id="expensePhoto" accept="image/*,application/pdf,.pdf">
           <div id="expensePhotoBox" class="d-none mt-2">
             <img id="expensePhotoPreview" alt="ตัวอย่างรูปใบเสร็จที่จะส่ง" class="rounded border w-100" style="max-height:14rem;object-fit:contain;background:#f5f5f5">
+            <div id="expenseFileChip" class="d-none align-items-center gap-2 border rounded p-2 bg-light">
+              <i class="bi bi-file-earmark-pdf text-danger fs-4"></i><span class="small" id="expenseFileName"></span>
+            </div>
             <div class="d-flex align-items-center justify-content-between mt-1">
               <small class="text-secondary" id="expensePhotoSize"></small>
               <button type="button" class="btn btn-sm btn-outline-secondary" id="expensePhotoClearBtn">เอารูปออก</button>
@@ -361,7 +364,7 @@
           <span>${EXPENSE_STATUS[r.status] ?? ''} <span class="ms-1">${esc(r.category)}</span>
             <div class="small text-secondary">${esc(formatDay(r.claim_date))}${r.detail ? ' · ' + esc(r.detail) : ''}</div>
             ${r.review_note ? `<div class="small text-danger">${esc(r.review_note)}</div>` : ''}
-            ${r.has_photo ? `<div><button class="btn btn-sm btn-outline-secondary mt-1" data-view-photo="${esc(r.id)}"><i class="bi bi-image me-1"></i>ดูใบเสร็จ</button></div>` : ''}</span>
+            ${r.has_photo ? `<div><button class="btn btn-sm btn-outline-secondary mt-1" data-view-photo="${esc(r.id)}" data-mime="${esc(r.photo_mime ?? 'image/jpeg')}"><i class="bi ${r.photo_mime === 'application/pdf' ? 'bi-file-earmark-pdf' : 'bi-image'} me-1"></i>ดูใบเสร็จ</button></div>` : ''}</span>
           <span class="text-end text-nowrap">
             <span class="fw-semibold">${baht(r.amount)}</span>
             ${r.status === 'approved' && r.approved_amount !== null && r.approved_amount !== r.amount
@@ -401,22 +404,53 @@
       expensePhotoData = null;
       $('expensePhoto').value = '';
       $('expensePhotoBox').classList.add('d-none');
+      $('expensePhotoPreview').classList.remove('d-none');
       $('expensePhotoPreview').removeAttribute('src');
+      $('expenseFileChip').classList.add('d-none');
+      $('expenseFileChip').classList.remove('d-flex');
       $('expensePhotoSize').textContent = '';
+    }
+
+    // PDF ย่อไม่ได้ ส่งไฟล์เดิมไปเลย แต่ยังจำกัดขนาดเท่ากัน
+    function readAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('อ่านไฟล์ไม่ได้'));
+        reader.readAsDataURL(file);
+      });
     }
 
     $('expensePhoto').addEventListener('change', async event => {
       const file = event.target.files && event.target.files[0];
       if (!file) { clearExpensePhoto(); return; }
       $('expenseFormMsg').textContent = '';
-      if (!/^image\//.test(file.type)) {
-        $('expenseFormMsg').innerHTML = '<span class="text-danger">แนบได้เฉพาะไฟล์รูปภาพ</span>';
+      const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+      if (!/^image\//.test(file.type) && !isPdf) {
+        $('expenseFormMsg').innerHTML = '<span class="text-danger">แนบได้เฉพาะไฟล์รูปภาพหรือ PDF</span>';
         clearExpensePhoto();
         return;
       }
       try {
+        if (isPdf) {
+          if (file.size > 3 * 1024 * 1024) {
+            $('expenseFormMsg').innerHTML = '<span class="text-danger">ไฟล์ PDF ต้องไม่เกิน 3 MB</span>';
+            clearExpensePhoto();
+            return;
+          }
+          expensePhotoData = await readAsDataUrl(file);
+          $('expensePhotoPreview').classList.add('d-none');
+          $('expenseFileName').textContent = file.name;
+          $('expenseFileChip').classList.remove('d-none');
+          $('expenseFileChip').classList.add('d-flex');
+          $('expensePhotoSize').textContent = `ขนาด ${(file.size / 1024).toFixed(0)} KB`;
+          $('expensePhotoBox').classList.remove('d-none');
+          return;
+        }
         expensePhotoData = await shrinkPhoto(file);
         const bytes = Math.round((expensePhotoData.length - expensePhotoData.indexOf(',') - 1) * 3 / 4);
+        $('expensePhotoPreview').classList.remove('d-none');
+        $('expenseFileChip').classList.add('d-none');
         $('expensePhotoPreview').src = expensePhotoData;
         $('expensePhotoSize').textContent = `ขนาดหลังย่อ ${(bytes / 1024).toFixed(0)} KB`;
         $('expensePhotoBox').classList.remove('d-none');
@@ -445,8 +479,19 @@
           method:'POST', headers:{ 'Content-Type':'application/json' },
           body: JSON.stringify({ accessToken, id })
         });
-        if (!response.ok) { alert('เปิดรูปไม่ได้'); return; }
-        $('photoViewerImg').src = URL.createObjectURL(await response.blob());
+        if (!response.ok) { alert('เปิดใบเสร็จไม่ได้'); return; }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        // PDF แสดงในหน้าไม่ได้ ให้บันทึกลงเครื่องแล้วเปิดด้วยแอปอ่าน PDF แทน
+        if (button.dataset.mime === 'application/pdf') {
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'ใบเสร็จ.pdf';
+          link.click();
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+          return;
+        }
+        $('photoViewerImg').src = url;
         $('photoViewer').classList.remove('d-none');
       } catch {
         alert('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');

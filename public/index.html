@@ -2422,7 +2422,7 @@
             ${row.department_name ? `<div class="small text-secondary">${esc(row.department_name)}</div>` : ''}</td>
           <td class="text-nowrap">${esc(row.category)}</td>
           <td class="small text-secondary">${esc(row.detail) || '-'}<div class="small">ส่งเมื่อ ${esc(row.created_at)}</div>
-            ${row.has_photo ? `<button type="button" class="btn btn-link btn-sm p-0 mt-1 text-decoration-none" data-claim-photo><i class="bi bi-image me-1"></i>ดูใบเสร็จ</button>` : ''}</td>
+            ${row.has_photo ? `<button type="button" class="btn btn-link btn-sm p-0 mt-1 text-decoration-none" data-claim-photo data-mime="${esc(row.photo_mime ?? 'image/jpeg')}"><i class="bi ${row.photo_mime === 'application/pdf' ? 'bi-file-earmark-pdf' : 'bi-image'} me-1"></i>${row.photo_mime === 'application/pdf' ? 'ใบเสร็จ PDF' : 'ดูใบเสร็จ'}</button>` : ''}</td>
           <td class="text-end fw-semibold">${baht(row.amount)}</td>
           <td><input class="form-control form-control-sm" type="number" min="0" step="0.01" data-claim-amount
                      value="${row.approved_amount !== null && row.approved_amount !== undefined ? row.approved_amount : row.amount}" style="width:7.5rem"></td>
@@ -2445,6 +2445,8 @@
       if (photoButton) {
         const claimRow = photoButton.closest('tr[data-claim-id]');
         const url = `/api/expenses/${claimRow.dataset.claimId}/photo`;
+        // PDF เปิดในหน้าไม่ได้เพราะเราล็อก CSP ไว้ ให้เปิดแท็บใหม่ให้เบราว์เซอร์จัดการแทน
+        if (photoButton.dataset.mime === 'application/pdf') { window.open(url, '_blank', 'noopener'); return; }
         photoModalImg.src = url;
         photoModalOpen.href = url;
         photoModalTitle.textContent = `รูปใบเสร็จ · ${claimRow.children[1].textContent.trim()}`;
