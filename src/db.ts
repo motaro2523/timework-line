@@ -129,6 +129,24 @@ export async function initializeDatabase() {
     -- สิทธิ์ส่งรายการค่าใช้จ่าย ผู้ดูแลเปิดให้เป็นรายคน
     ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_submit_expense BOOLEAN NOT NULL DEFAULT FALSE;
     -- รายการค่าใช้จ่ายที่พนักงานส่งเข้ามา ต้องผ่านการอนุมัติเหมือน OT
+    -- บอกว่าเงินที่จ่ายแต่ละครั้งไปปิดรายการไหนบ้าง
+    -- เดิมมีแต่ยอดรวม ระบบจึงตอบไม่ได้ว่าจ่ายค่าแรงงวดไหนหรือปิดใบเสร็จใบใด
+    CREATE TABLE IF NOT EXISTS payment_allocations (
+      id BIGSERIAL PRIMARY KEY,
+      payment_id BIGINT NOT NULL REFERENCES payroll_entries(id) ON DELETE CASCADE,
+      source VARCHAR(10) NOT NULL CHECK (source IN ('wage','expense','advance')),
+      expense_id BIGINT REFERENCES expense_claims(id) ON DELETE SET NULL,
+      advance_id BIGINT REFERENCES payroll_entries(id) ON DELETE SET NULL,
+      wage_from DATE,
+      wage_to DATE,
+      amount NUMERIC(12,2) NOT NULL,
+      label VARCHAR(160) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS payment_allocations_payment_idx ON payment_allocations(payment_id);
+    CREATE INDEX IF NOT EXISTS payment_allocations_expense_idx ON payment_allocations(expense_id);
+    CREATE INDEX IF NOT EXISTS payment_allocations_advance_idx ON payment_allocations(advance_id);
+
     -- ค่าตั้งค่าของระบบแบบคีย์-ค่า ตอนนี้ใช้เก็บการแจ้งเตือนเข้า LINE
     CREATE TABLE IF NOT EXISTS app_settings (
       key VARCHAR(60) PRIMARY KEY,

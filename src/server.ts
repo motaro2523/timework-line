@@ -205,6 +205,13 @@ async function pushLine(userId: string | null | undefined, text: string) {
   }
 }
 
+const round2 = (value: number) => Math.round(value * 100) / 100;
+const formatThaiDay = (iso: string) =>
+  new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: '2-digit', timeZone: 'Asia/Bangkok' })
+    .format(new Date(`${iso}T00:00:00Z`));
+const formatThaiRange = (from: string, to: string) =>
+  from === to ? formatThaiDay(from) : `${formatThaiDay(from)} ถึง ${formatThaiDay(to)}`;
+
 const normalizeEmail = (value: unknown) => String(value ?? '').trim().toLowerCase();
 const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value) && value.length <= 160;
 
@@ -582,6 +589,191 @@ app.patch<{ Params: { id: string }; Body: { name?: string; active?: boolean; can
     const constraint = constraintMessage(error);
     if (constraint) return reply.code(constraint.status).send({ error: constraint.error });
     throw error;
+  }
+});
+
+// ===== จ่ายเงินโดยเลือกรายการที่จ่าย =====
+// แนวคิด: ทุกอย่างที่ค้างจ่ายถูกแตกเป็นรายการ แล้วการจ่ายหนึ่งครั้งไปปิดรายการที่เลือก
+// จึงตอบได้เสมอว่าเงินก้อนนั้นจ่ายค่าอะไร ไม่ต้องเดาจากช่องหมายเหตุ
+
+// ค่าแรงจ่ายถึงวันไหนแล้ว ดูจากช่วงที่เคยถูกเลือกจ่ายไป ไม่ใช่จากเดือนปฏิทิน
+async function wagePaidThrough(employeeId: string): Promise<string | null> {
+  const { rows } = await db.query(`
+    SELECT to_char(MAX(a.wage_to), 'YYYY-MM-DD') AS paid_through
+    FROM payment_allocations a JOIN payroll_entries p ON p.id = a.payment_id
+    WHERE p.employee_id = $1 AND a.source = 'wage'`, [employeeId]);
+  return rows[0]?.paid_through ?? null;
+}
+
+async function outstandingItems(employeeId: string, asOf: string) {
+  const paidThrough = await wagePaidThrough(employeeId);
+  // ยังไม่เคยจ่ายค่าแรงเลย เริ่มนับจากวันแรกที่มีข้อมูลของคนนั้น
+  const startRow = await db.query(`
+    SELECT to_char(LEAST(
+      COALESCE((SELECT MIN((occurred_at AT TIME ZONE 'Asia/Bangkok')::date) FROM time_logs WHERE employee_id = $1), $2::date),
+      COALESCE((SELECT start_date FROM employees WHERE id = $1), $2::date)
+    ), 'YYYY-MM-DD') AS first_day`, [employeeId, asOf]);
+  const wageFrom = paidThrough
+    ? new Date(Date.parse(`${paidThrough}T00:00:00Z`) + 86400000).toISOString().slice(0, 10)
+    : startRow.rows[0].first_day;
+
+  const items: Record<string, unknown>[] = [];
+  if (wageFrom <= asOf) {
+    const payroll = await computePayroll(wageFrom, asOf, employeeId, '');
+    const row = payroll[0];
+    if (row && row.has_type) {
+      // ค่าใช้จ่ายไม่รวมในก้อนนี้ เพราะแยกเป็นรายการของตัวเองด้านล่าง
+      const wage = round2(row.base_pay + row.ot_pay - row.absent_deduct - row.late_deduct);
+      if (wage !== 0) {
+        items.push({
+          key: `wage:${wageFrom}:${asOf}`, source: 'wage', amount: wage,
+          label: `ค่าแรงและ OT ${formatThaiRange(wageFrom, asOf)}`,
+          detail: `ทำงาน ${row.worked_days} วัน · ค่าแรง ${row.base_pay} · OT ${row.ot_pay} · หัก ${round2(row.absent_deduct + row.late_deduct)}`,
+          wage_from: wageFrom, wage_to: asOf
+        });
+      }
+    } else if (row) {
+      items.push({ key: 'wage:none', source: 'wage', amount: 0, blocked: true,
+        label: 'ยังกำหนดประเภทพนักงานไม่ครบ จึงคิดค่าแรงไม่ได้', detail: '', wage_from: wageFrom, wage_to: asOf });
+    }
+  }
+
+  // ใบเสร็จที่อนุมัติแล้วและยังไม่ถูกเลือกจ่าย
+  const expenses = await db.query(`
+    SELECT c.id, to_char(c.claim_date, 'YYYY-MM-DD') AS claim_date, c.category,
+           c.approved_amount::float8 AS approved_amount, c.detail,
+           COALESCE((SELECT SUM(a.amount) FROM payment_allocations a WHERE a.expense_id = c.id), 0)::float8 AS allocated
+    FROM expense_claims c
+    WHERE c.employee_id = $1 AND c.status = 'approved' AND c.claim_date <= $2::date
+    ORDER BY c.claim_date, c.id`, [employeeId, asOf]);
+  for (const row of expenses.rows) {
+    const remaining = round2(row.approved_amount - row.allocated);
+    if (remaining <= 0) continue;
+    items.push({
+      key: `expense:${row.id}`, source: 'expense', expense_id: String(row.id), amount: remaining,
+      label: `ค่าใช้จ่าย ${row.category} ${formatThaiDay(row.claim_date)}`,
+      detail: row.detail ?? ''
+    });
+  }
+
+  // เงินเบิกล่วงหน้าที่ยังไม่ถูกหักกลบ แสดงเป็นยอดติดลบ
+  const advances = await db.query(`
+    SELECT p.id, to_char(p.entry_date, 'YYYY-MM-DD') AS entry_date, p.amount::float8 AS amount, p.note,
+           COALESCE((SELECT -SUM(a.amount) FROM payment_allocations a WHERE a.advance_id = p.id), 0)::float8 AS settled
+    FROM payroll_entries p
+    WHERE p.employee_id = $1 AND p.kind = 'advance' AND p.entry_date <= $2::date
+    ORDER BY p.entry_date, p.id`, [employeeId, asOf]);
+  for (const row of advances.rows) {
+    const remaining = round2(row.amount - row.settled);
+    if (remaining <= 0) continue;
+    items.push({
+      key: `advance:${row.id}`, source: 'advance', advance_id: String(row.id), amount: -remaining,
+      label: `หักเงินเบิกล่วงหน้า ${formatThaiDay(row.entry_date)}`,
+      detail: row.note ?? ''
+    });
+  }
+  return { wage_paid_through: paidThrough, as_of: asOf, items };
+}
+
+app.get<{ Querystring: { employeeId?: string; asOf?: string } }>('/api/payruns/outstanding', async (request, reply) => {
+  if (!canRead(request.admin?.permissions.advance ?? 'none')) {
+    return reply.code(403).send({ error: 'ไม่มีสิทธิ์ดูข้อมูลการจ่ายเงิน' });
+  }
+  const employeeId = String(request.query.employeeId ?? '').trim();
+  if (!/^\d+$/.test(employeeId)) return reply.code(400).send({ error: 'ต้องเลือกพนักงาน' });
+  const asOf = parseIsoDate((request.query.asOf ?? '').trim() || bangkokDate());
+  if (asOf.error) return reply.code(400).send({ error: asOf.error });
+  return outstandingItems(employeeId, asOf.value!);
+});
+
+app.get<{ Params: { id: string } }>('/api/payroll/entries/:id/allocations', async (request, reply) => {
+  if (!canRead(request.admin?.permissions.advance ?? 'none')) {
+    return reply.code(403).send({ error: 'ไม่มีสิทธิ์ดูข้อมูลการจ่ายเงิน' });
+  }
+  if (!/^\d+$/.test(request.params.id)) return reply.code(400).send({ error: 'รหัสอ้างอิงไม่ถูกต้อง' });
+  const { rows } = await db.query(
+    `SELECT source, label, amount::float8 AS amount,
+            to_char(wage_from,'YYYY-MM-DD') AS wage_from, to_char(wage_to,'YYYY-MM-DD') AS wage_to
+     FROM payment_allocations WHERE payment_id = $1 ORDER BY id`, [request.params.id]);
+  return rows;
+});
+
+type PayRunItem = { key?: string; source?: string; expenseId?: string; advanceId?: string;
+  wageFrom?: string; wageTo?: string; amount?: number | string; label?: string };
+
+app.post<{ Body: { employeeId?: string; payDate?: string; method?: string; note?: string; items?: PayRunItem[] } }>(
+  '/api/payruns', async (request, reply) => {
+  if (!canWrite(request.admin?.permissions.advance ?? 'none')) {
+    return reply.code(403).send({ error: 'ไม่มีสิทธิ์บันทึกการจ่ายเงิน' });
+  }
+  const employeeId = String(request.body?.employeeId ?? '').trim();
+  if (!/^\d+$/.test(employeeId)) return reply.code(400).send({ error: 'ต้องเลือกพนักงาน' });
+  const payDate = parseIsoDate(String(request.body?.payDate ?? '').trim() || bangkokDate());
+  if (payDate.error) return reply.code(400).send({ error: payDate.error });
+  const items = Array.isArray(request.body?.items) ? request.body!.items! : [];
+  if (!items.length) return reply.code(400).send({ error: 'ต้องเลือกอย่างน้อยหนึ่งรายการ' });
+  if (items.length > 200) return reply.code(400).send({ error: 'เลือกรายการได้ไม่เกิน 200 รายการต่อครั้ง' });
+
+  // ตรวจกับรายการค้างจริงฝั่งเซิร์ฟเวอร์เสมอ ไม่เชื่อยอดที่หน้าจอส่งมา
+  const outstanding = await outstandingItems(employeeId, payDate.value!);
+  const available = new Map(outstanding.items.map(item => [item.key as string, item]));
+
+  const prepared: { source: string; expenseId: string | null; advanceId: string | null;
+    wageFrom: string | null; wageTo: string | null; amount: number; label: string }[] = [];
+  for (const item of items) {
+    const found = available.get(String(item.key ?? ''));
+    if (!found) return reply.code(400).send({ error: 'มีรายการที่ไม่อยู่ในยอดค้างแล้ว กรุณากดคำนวณใหม่' });
+    if (found.blocked) return reply.code(400).send({ error: String(found.label) });
+    const requested = Number(item.amount ?? found.amount);
+    const full = Number(found.amount);
+    if (!Number.isFinite(requested) || requested === 0) {
+      return reply.code(400).send({ error: 'จำนวนเงินของรายการไม่ถูกต้อง' });
+    }
+    // จ่ายบางส่วนได้ แต่ห้ามเกินยอดค้าง และห้ามสลับเครื่องหมาย
+    if (full > 0 && (requested < 0 || requested > full + 0.004)) {
+      return reply.code(400).send({ error: `จ่ายรายการ "${found.label}" เกินยอดค้างไม่ได้` });
+    }
+    if (full < 0 && (requested > 0 || requested < full - 0.004)) {
+      return reply.code(400).send({ error: `หักรายการ "${found.label}" เกินยอดค้างไม่ได้` });
+    }
+    prepared.push({
+      source: String(found.source),
+      expenseId: found.expense_id ? String(found.expense_id) : null,
+      advanceId: found.advance_id ? String(found.advance_id) : null,
+      wageFrom: found.wage_from ? String(found.wage_from) : null,
+      wageTo: found.wage_to ? String(found.wage_to) : null,
+      amount: round2(requested),
+      label: String(found.label).slice(0, 160)
+    });
+  }
+  const total = round2(prepared.reduce((sum, item) => sum + item.amount, 0));
+  if (total <= 0) return reply.code(400).send({ error: 'ยอดรวมที่จ่ายต้องมากกว่า 0 บาท' });
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const payment = await client.query(
+      `INSERT INTO payroll_entries (employee_id, entry_date, kind, amount, method, note)
+       VALUES ($1, $2::date, 'payment', $3, $4, $5) RETURNING id`,
+      [employeeId, payDate.value, total,
+       String(request.body?.method ?? '').trim().slice(0, 20) || null,
+       String(request.body?.note ?? '').trim().slice(0, 160) || null]);
+    const paymentId = payment.rows[0].id;
+    for (const item of prepared) {
+      await client.query(
+        `INSERT INTO payment_allocations (payment_id, source, expense_id, advance_id, wage_from, wage_to, amount, label)
+         VALUES ($1, $2, $3, $4, $5::date, $6::date, $7, $8)`,
+        [paymentId, item.source, item.expenseId, item.advanceId, item.wageFrom, item.wageTo, item.amount, item.label]);
+    }
+    await client.query('COMMIT');
+    await writeAudit(request.admin ?? null, 'payrun.create', `employee:${employeeId}`,
+      { total, items: prepared.length, payDate: payDate.value });
+    return reply.code(201).send({ id: String(paymentId), total, items: prepared.length });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
 });
 
@@ -1862,7 +2054,9 @@ async function computePayroll(from: string, to: string, employeeId: string, depa
     ),
     daily AS (
       SELECT b.employee_id, b.employee_code, b.name,
-             (s.id IS NOT NULL) AS is_workday,
+             -- วันในอนาคตยังไม่เกิดขึ้น จะนับเป็นวันทำงานหรือวันขาดไม่ได้
+             -- ไม่อย่างนั้นดูยอดกลางเดือนทีไร วันที่เหลือทั้งเดือนกลายเป็นขาดงานหมด
+             (s.id IS NOT NULL AND b.work_date <= (NOW() AT TIME ZONE 'Asia/Bangkok')::date) AS is_workday,
              (lv.employee_id IS NOT NULL) AS on_leave,
              sc.first_in, sc.last_out,
              CASE WHEN s.id IS NOT NULL AND sc.first_in IS NOT NULL AND lv.employee_id IS NULL
@@ -1929,7 +2123,6 @@ async function computePayroll(from: string, to: string, employeeId: string, depa
     ORDER BY d.employee_code
   `, [from, to, employeeId, departmentId]);
 
-  const round2 = (value: number) => Math.round(value * 100) / 100;
   const payroll = rows.map(row => {
     const rate = row.pay_rate ?? 0;
     const divisor = row.monthly_days_divisor ?? 30;
@@ -2027,7 +2220,7 @@ app.get<{ Querystring: { from?: string; to?: string; employeeId?: string; depart
            to_char(b.work_date, 'YYYY-MM-DD') AS work_date,
            b.override_note,
            lv.leave_type, lv.note AS leave_note,
-           (s.id IS NOT NULL) AS is_workday,
+           (s.id IS NOT NULL AND b.work_date <= (NOW() AT TIME ZONE 'Asia/Bangkok')::date) AS is_workday,
            s.name AS shift_name,
            to_char(s.start_time, 'HH24:MI') AS shift_start,
            to_char(s.end_time, 'HH24:MI') AS shift_end,
