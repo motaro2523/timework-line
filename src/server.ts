@@ -115,8 +115,13 @@ const ROUTE_PERMISSIONS: [RegExp, string][] = [
   [/^\/api\/ot/,                           'ot'],
   [/^\/api\/payroll\/entries/,             'advance'],
   [/^\/api\/payroll/,                      'pay'],
+  // หน้าจ่ายเงินเป็นงานเดียวกับเงินที่เบิก ตัว handler เช็คสิทธิ์ advance อยู่แล้ว
+  // เคยตกหล่นจากตารางนี้ เลยถูกนับเป็นของผู้ดูแลระบบ บทบาทการเงินจึงเปิดหน้าจ่ายเงินไม่ได้
+  [/^\/api\/payruns/,                      'advance'],
   [/^\/api\/expenses/,                     'expenses'],
-  [/^\/api\/(departments|employee-types|work-sites)/, 'settings']
+  [/^\/api\/(departments|employee-types|work-sites)/, 'settings'],
+  // การแจ้งสรุปประจำวันอยู่ในหน้าตั้งค่า ตัว handler เช็คสิทธิ์ settings อยู่แล้ว
+  [/^\/api\/settings\//,                   'settings']
 ];
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 

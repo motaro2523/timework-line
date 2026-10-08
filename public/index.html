@@ -1543,16 +1543,24 @@
       typeModal.show();
     }
 
+    // ข้อมูลกลางที่ทุกหน้าใช้ร่วมกัน บางบทบาทไม่มีสิทธิ์ดูบางชุด เช่นการเงินดูกะไม่ได้
+    // เซิร์ฟเวอร์จึงตอบ 403 เป็นข้อความ error ไม่ใช่รายการ ถ้าเอาไปวนลูปตรงๆ ทั้งแดชบอร์ดจะหยุดกลางทาง
+    // จึงถือว่าชุดที่ไม่มีสิทธิ์เป็นรายการว่าง หน้าที่ใช้ข้อมูลชุดนั้นก็ถูกซ่อนจากบทบาทนี้อยู่แล้ว
+    const fetchList = url => fetch(url)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => Array.isArray(data) ? data : [])
+      .catch(() => []);
+
     async function loadDashboard() {
       try {
         const [employees, logs, shifts, weekly, types, departments, sites] = await Promise.all([
-          fetch('/api/employees').then(r => r.json()),
-          fetch('/api/time-logs/today').then(r => r.json()),
-          fetch('/api/shifts').then(r => r.json()),
-          fetch('/api/schedules/weekly').then(r => r.json()),
-          fetch('/api/employee-types').then(r => r.json()),
-          fetch('/api/departments').then(r => r.json()),
-          fetch('/api/work-sites').then(r => r.json())
+          fetchList('/api/employees'),
+          fetchList('/api/time-logs/today'),
+          fetchList('/api/shifts'),
+          fetchList('/api/schedules/weekly'),
+          fetchList('/api/employee-types'),
+          fetchList('/api/departments'),
+          fetchList('/api/work-sites')
         ]);
         employeeList = employees;
         shiftList = shifts;
@@ -3582,7 +3590,7 @@
     applyFinanceMonth();
     route();
     loadMe();
-    fetch('/api/leaves/types').then(r => r.json()).then(types => { leaveTypes = types; renderLeaveControls(); }).catch(() => {});
+    fetchList('/api/leaves/types').then(types => { leaveTypes = types; renderLeaveControls(); });
     loadDashboard();
     loadDaySchedule();
     loadLeaveList();
